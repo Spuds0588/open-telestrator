@@ -1,11 +1,10 @@
+import { COLORS } from '../lib/telestration'
+
 import type { Tool } from '../lib/telestration'
-
-export const COLORS = ['#ef4444', '#f59e0b', '#22c55e', '#3b82f6', '#a855f7', '#ffffff'] as const
-
 const TOOLS: { id: Tool; label: string; glyph: string }[] = [
   { id: 'pen', label: 'Pen', glyph: '✎' },
-  { id: 'line', label: 'Line', glyph: '╱' },
-  { id: 'arrow', label: 'Arrow', glyph: '↗' },
+  { id: 'highlight', label: 'Highlight', glyph: '⎘' },
+  { id: 'rect', label: 'Rectangle', glyph: '▭' },
   { id: 'ellipse', label: 'Circle', glyph: '◯' },
 ]
 
