@@ -1,25 +1,44 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { clamp01, renderStrokes, type Point, type Stroke, type Tool } from '../lib/telestration'
-import { COLORS, Toolbar, type Mode } from './Toolbar'
+import { useCallback, useEffect, useRef } from 'react'
+import { clamp01, renderStrokes, type Gesture, type Point, type Tool, type Stroke } from '../lib/telestration'
 
 /**
  * The telestration canvas laid over the video.
  *
- * The canvas never re-renders React state while drawing: strokes live in refs and
- * are painted imperatively, so a long freehand stroke costs no re-renders. React
- * state is only used for the toolbar (`revision` bumps after undo/clear).
+ * This component is *controlled*: the committed strokes and the drawing state
+ * (`tool`/`color`/`width`) live in the parent (the App) and are threaded down
+ * here as read-only props. The canvas paints them imperatively (its refs are
+ * the canvas DOM + the transient draft). No React state is used while drawing.
+ *
+ * When a gesture ends, `onStrokeCommitted` is called, so the parent can append
+ * the gesture to its own committed-stroke list, run undo/redo history, and let
+ * the canvas re-paint with the updated list.
  */
-export function TelestrationOverlay() {
+export function TelestrationOverlay({
+  strokes,
+  tool,
+  color,
+  width,
+  onStrokeCommitted,
+}: {
+  /** Committed, replayable strokes, owned by the host (App). */
+  strokes: Stroke[]
+  /** The active drawing tool (for the canvas active class). */
+  tool: Tool
+  /** The active colour (used while a gesture is in progress). */
+  color: string
+  /** The active stroke width (used while a gesture is in progress). */
+  width: number
+  /** Called once per completed gesture with the gesture to commit. */
+  onStrokeCommitted: (gesture: Gesture & { id: string }) => void
+}) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  const strokesRef = useRef<Stroke[]>([])
-  const draftRef = useRef<Stroke | null>(null)
+
+  // The in-progress gesture (not yet committed). Lives in a ref so it survives
+  // React re-renders while the pointer is down.
+  const draftRef = useRef<Gesture & { id: string } | null>(null)
   const activePointerRef = useRef<number | null>(null)
 
-  const [revision, setRevision] = useState(0)
-  const [mode, setMode] = useState<Mode>('draw')
-  const [tool, setTool] = useState<Tool>('pen')
-  const [color, setColor] = useState<string>(COLORS[0])
-  const [width, setWidth] = useState(4)
+  const nextId = useCallback(() => crypto.randomUUID(), [])
 
   const render = useCallback(() => {
     const canvas = canvasRef.current
@@ -37,11 +56,11 @@ export function TelestrationOverlay() {
     }
 
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
-    renderStrokes(ctx, strokesRef.current, draftRef.current, cssWidth, cssHeight)
-  }, [])
+    renderStrokes(ctx, strokes, draftRef.current, cssWidth, cssHeight)
+  }, [strokes, renderStrokes])
 
-  // Repaint on mount, on resize (window/orientation/layout), and when a stroke
-  // is committed or removed.
+  // Paint committed strokes + the in-progress draft on mount and whenever the
+  // list of committed strokes changes.
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
@@ -50,10 +69,6 @@ export function TelestrationOverlay() {
     render()
     return () => observer.disconnect()
   }, [render])
-
-  useEffect(() => {
-    render()
-  }, [revision, render])
 
   const toPoint = useCallback((event: React.PointerEvent<HTMLCanvasElement>): Point => {
     const rect = event.currentTarget.getBoundingClientRect()
@@ -73,7 +88,7 @@ export function TelestrationOverlay() {
       // Some environments (and synthetic/test pointers) reject capture; drawing
       // still works via the element's own event listeners.
     }
-    draftRef.current = { tool, color, width, points: [toPoint(event)] }
+    draftRef.current = { id: nextId(), tool, color, width, points: [toPoint(event)] }
     render()
   }
 
@@ -98,45 +113,20 @@ export function TelestrationOverlay() {
       event.currentTarget.releasePointerCapture(event.pointerId)
     }
     if (draft && draft.points.length > 0) {
-      strokesRef.current.push(draft)
+      onStrokeCommitted?.(draft)
     }
-    setRevision((value) => value + 1)
-  }
-
-  const undo = () => {
-    strokesRef.current.pop()
-    setRevision((value) => value + 1)
-  }
-
-  const clear = () => {
-    strokesRef.current = []
-    draftRef.current = null
-    setRevision((value) => value + 1)
   }
 
   return (
     <div className="overlay">
       <canvas
         ref={canvasRef}
-        className={`overlay__canvas ${mode === 'draw' ? 'overlay__canvas--active' : ''}`}
+        className={`overlay__canvas ${tool === 'pen' ? 'overlay__canvas--active' : ''}`}
         data-testid="telestration-canvas"
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerEnd}
         onPointerCancel={handlePointerEnd}
-      />
-      <Toolbar
-        mode={mode}
-        onModeChange={setMode}
-        tool={tool}
-        onToolChange={setTool}
-        color={color}
-        onColorChange={setColor}
-        width={width}
-        onWidthChange={setWidth}
-        canUndo={strokesRef.current.length > 0}
-        onUndo={undo}
-        onClear={clear}
       />
     </div>
   )

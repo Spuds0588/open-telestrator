@@ -1,34 +1,74 @@
-/**
- * Telestration model.
- *
- * Every point is normalized to the video container (0.0–1.0), so a stroke keeps
- * its position and shape on any screen size, resolution, or orientation — and
- * can be serialized and replayed on remote canvases later.
- */
+/** Telestration model.
 
-export type Tool = 'pen' | 'line' | 'arrow' | 'ellipse'
+Every point is normalized to the video container (0.0-1.0), so a stroke keeps
+its position and shape on any screen size, resolution, or orientation - and can
+be serialized and replayed on remote canvases later.
+*/
 
-export interface Point {
-  /** 0.0 (left) – 1.0 (right). */
-  x: number
-  /** 0.0 (top) – 1.0 (bottom). */
-  y: number
-}
+// The toolkit is intentionally small. Line and circle are dropped: they are
+// rarely the fastest way to mark a zone, and the highlight region covers the
+// cases where a precise shape was wanted without the UI clutter.
+export type Tool = 'pen' | 'highlight' | 'rect' | 'ellipse'
 
-export interface Stroke {
+/** A single, ordered gesture - a stroke, a rectangle or a highlight region. */
+export interface Gesture {
   tool: Tool
   color: string
-  /** Stroke width in CSS pixels at the canvas's current display size. */
   width: number
   points: Point[]
 }
 
+/** A committed, replayable stroke. */
+export interface Stroke extends Gesture {
+  id: string
+}
+
+export interface Point {
+  /** 0.0 (left) - 1.0 (right). */
+  x: number
+  /** 0.0 (top) - 1.0 (bottom). */
+  y: number
+}
+
 export const clamp01 = (value: number): number => Math.min(1, Math.max(0, value))
 
-/**
- * Draws a single stroke onto a 2D context whose transform maps 1 unit to 1 CSS
- * pixel. `width`/`height` are the current CSS size of the canvas.
- */
+const TOOL_GLYPH: Record<Tool, string> = {
+  pen: '✎',
+  highlight: '⎘',
+  rect: '▭',
+  ellipse: '◯',
+}
+
+/** The subset of tools that behave like a freehand shape: points trace the
+ * outline and the renderer fills between the first and last point. */
+export const SHAPES = ['pen', 'rect', 'ellipse'] as const
+
+/** All tools the host can draw with. */
+export const ALL_TOOLS = ['pen', 'highlight', 'rect', 'ellipse'] as const
+
+/** The default tool for a fresh canvas. */
+export const DEFAULT_TOOL: Tool = 'pen'
+
+/** The default colour for new strokes. */
+export const DEFAULT_COLOR = '#ef4444'
+export const COLORS = ['#ef4444', '#f59e0b', '#22c55e', '#3b82f6', '#a855f7', '#ffffff'] as const
+
+
+export const WOODLAND_COLORS = [
+  '#ef4444',
+  '#f59e0b',
+  '#22c55e',
+  '#3b82f6',
+  '#a855f7',
+  '#ffffff',
+] as const
+
+export function toolGlyph(tool: Tool): string {
+  return TOOL_GLYPH[tool]
+}
+
+/** Draws a single gesture onto a 2D context whose transform maps 1 unit to 1
+ * CSS pixel. `width`/`height` are the current CSS size of the canvas. */
 export function drawStroke(
   ctx: CanvasRenderingContext2D,
   stroke: Stroke,
@@ -74,6 +114,32 @@ export function drawStroke(
     ctx.beginPath()
     ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2)
     ctx.stroke()
+    return
+  }
+
+  if (stroke.tool === 'rect') {
+    const x0 = Math.min(x(start), x(end))
+    const y0 = Math.min(y(start), y(end))
+    const x1 = Math.max(x(start), x(end))
+    const y1 = Math.max(y(start), y(end))
+    ctx.beginPath()
+    ctx.rect(x0, y0, x1 - x0, y1 - y0)
+    ctx.stroke()
+    return
+  }
+
+  if (stroke.tool === 'highlight') {
+    const x0 = Math.min(x(start), x(end))
+    const y0 = Math.min(y(start), y(end))
+    const x1 = Math.max(x(start), x(end))
+    const y1 = Math.max(y(start), y(end))
+    ctx.fillStyle = stroke.color + '55'
+    ctx.fillRect(x0, y0, x1 - x0, y1 - y0)
+    ctx.strokeStyle = stroke.color
+    ctx.lineWidth = Math.max(stroke.width, 1)
+    ctx.setLineDash([4, 4])
+    ctx.strokeRect(x0, y0, x1 - x0, y1 - y0)
+    ctx.setLineDash([])
     return
   }
 

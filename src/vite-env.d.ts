@@ -1,6 +1,23 @@
 /// <reference types="vite/client" />
 /// <reference types="vite-plugin-pwa/client" />
 
+// `qrcode` ships without bundled TypeScript types; provide a minimal ambient
+// declaration so `qrOf` and `QRCode.toDataURL` type-checks without a whole
+// dependency on `@types/qrcode`.
+declare module 'qrcode' {
+  const QRCode: {
+    toDataURL(dataUrl: string, opts?: Record<string, unknown>): Promise<string>
+  }
+  export default QRCode
+}
+
+// Custom CSS properties used for dynamic camera zoom.
+export {}
+
+interface CSSProperties {
+  readonly '--zoom'?: string
+}
+
 interface ImportMetaEnv {
   /**
    * JSON array of `RTCIceServer` objects, e.g.

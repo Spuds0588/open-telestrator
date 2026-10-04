@@ -4,12 +4,31 @@ import { ReplayControls } from './ReplayControls'
 import { AudioControls } from './AudioControls'
 import { REPLAY_RATE, useReplay } from '../lib/useReplay'
 import { useAudioMixer } from '../lib/useAudioMixer'
+import { type Stroke, type Tool, type Gesture } from '../lib/telestration'
 
-/**
- * The 16:9 stage: the captured video (or a replay of it) with the telestration
- * canvas layered on top and the replay controls in the corner.
- */
-export function VideoStage({ stream }: { stream: MediaStream | null }) {
+/** The 16:9 stage: the captured video (or a replay of it) with the telestration
+ * canvas layered on top and the replay controls in the corner. */
+export function VideoStage({
+  stream,
+  past,
+  tool,
+  color,
+  width,
+  onStrokeCommitted,
+}: {
+  stream: MediaStream | null
+  /** Committed strokes owned by the host (App). The canvas paints these
+   * imperatively and re-paints whenever the list changes. */
+  past: Stroke[]
+  /** The active drawing tool. */
+  tool: Tool
+  /** The active stroke colour. */
+  color: string
+  /** The active stroke width. */
+  width: number
+  /** Called once per completed gesture with the gesture to commit. */
+  onStrokeCommitted: (gesture: Gesture & { id: string }) => void
+}) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const replay = useReplay(stream, videoRef)
   const audio = useAudioMixer(stream)
@@ -54,7 +73,13 @@ export function VideoStage({ stream }: { stream: MediaStream | null }) {
     <div className="screen" data-testid="screen">
       <video ref={videoRef} className="screen__video" muted playsInline />
       {!stream && !replay.replaying && <div className="screen__empty">No signal</div>}
-      <TelestrationOverlay />
+      <TelestrationOverlay
+        strokes={past}
+        tool={tool}
+        color={color}
+        width={width}
+        onStrokeCommitted={onStrokeCommitted}
+      />
       <ReplayControls {...replay} />
       <AudioControls {...audio} />
     </div>

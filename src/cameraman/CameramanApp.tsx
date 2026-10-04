@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import type { CSSProperties } from 'react'
 import Peer, { type MediaConnection } from 'peerjs'
 import { parseCameraLink, type CameraSession } from '../lib/cameraLink'
 import { peerOptions } from '../lib/peerConfig'
@@ -178,6 +179,36 @@ export default function CameramanApp() {
     setNotice(null)
   }, [teardown])
 
+  // Digital zoom state: a CSS transform scale applied to the video element.
+  const [zoom, setZoom] = useState(1)
+  const zoomIn = useCallback(() => setZoom((v) => Math.min(4, v + 0.25)), [])
+  const zoomOut = useCallback(() => setZoom((v) => Math.max(1, v - 0.25)), [])
+  const resetZoom = useCallback(() => setZoom(1), [])
+
+  // Toggle the full-screen mode. The video keeps aspect ratio via
+  // `object-fit: contain` and the container resizes to fill the viewport.
+  const [fullscreen, setFullscreen] = useState(false)
+  const enterFullscreen = useCallback(() => {
+    if (document.fullscreenElement) return
+    const el = document.documentElement
+    void el.requestFullscreen().catch(() => undefined)
+    setFullscreen(true)
+  }, [])
+  const exitFullscreen = useCallback(() => {
+    if (document.fullscreenElement) {
+      void document.exitFullscreen().catch(() => undefined)
+    }
+    setFullscreen(false)
+  }, [])
+  useEffect(() => {
+    if (!fullscreen) return
+    const onFullscreenChange = () => {
+      if (!document.fullscreenElement) setFullscreen(false)
+    }
+    document.addEventListener('fullscreenchange', onFullscreenChange)
+    return () => document.removeEventListener('fullscreenchange', onFullscreenChange)
+  }, [fullscreen])
+
   return (
     <div className="camera">
       <header className="camera__topbar">
@@ -188,8 +219,17 @@ export default function CameramanApp() {
       </header>
 
       <main className="camera__main">
-        <div className="camera__preview" data-testid="camera-preview">
-          <video ref={videoRef} className="camera__video" muted playsInline />
+        <div
+          className={"camera__preview" + (fullscreen ? ' camera__preview--fullscreen' : '')}
+          data-testid="camera-preview"
+        >
+          <video
+            ref={videoRef}
+            className="camera__video"
+            style={zoom > 1 ? { '--zoom': zoom.toString() } as CSSProperties : undefined}
+            muted
+            playsInline
+          />
           {!preview && <div className="screen__empty">No camera</div>}
         </div>
 
@@ -206,6 +246,48 @@ export default function CameramanApp() {
           <p className="camera__notice" role="alert">
             {notice}
           </p>
+        )}
+
+        {/* Zoom + full-screen controls, shown on live camera. */}
+        {status === 'live' && (
+          <div className="camera__zoom-btns">
+            <button
+              type="button"
+              className="btn"
+              data-testid="camera-zoom-out"
+              onClick={zoomOut}
+              aria-label="Zoom out"
+            >
+              −
+            </button>
+            <button
+              type="button"
+              className="btn"
+              data-testid="camera-zoom-reset"
+              onClick={resetZoom}
+              aria-label="Reset zoom"
+            >
+              100%
+            </button>
+            <button
+              type="button"
+              className="btn"
+              data-testid="camera-zoom-in"
+              onClick={zoomIn}
+              aria-label="Zoom in"
+            >
+              +
+            </button>
+            <button
+              type="button"
+              className="btn btn--ghost"
+              data-testid="camera-fullscreen"
+              onClick={fullscreen ? exitFullscreen : enterFullscreen}
+              aria-label={fullscreen ? 'Exit full screen' : 'Enter full screen'}
+            >
+              {fullscreen ? '⛶ Exit' : '⛶ Full'}
+            </button>
+          </div>
         )}
 
         {status === 'ready' || status === 'rejected' || status === 'error' || status === 'denied' ? (
