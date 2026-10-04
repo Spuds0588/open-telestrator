@@ -116,6 +116,103 @@ body {
   min-height: 0;
 }
 
+.sources {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  width: 100%;
+  max-width: 1100px;
+}
+
+.sources__list,
+.sources__camera {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.sources__label {
+  color: var(--muted);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.sources__empty {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.sources__link {
+  width: 260px;
+  max-width: 56vw;
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  padding: 6px 10px;
+  border-radius: 8px;
+}
+
+/* Cameraman page: preview + one button, nothing else. */
+.camera {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.camera__main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 20px;
+  min-height: 0;
+}
+
+.camera__preview {
+  position: relative;
+  width: min(100%, 720px);
+  aspect-ratio: 16 / 9;
+  background: #000;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.camera__video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #000;
+}
+
+.camera__status {
+  margin: 0;
+  color: var(--text);
+  text-align: center;
+}
+
+.camera__status[data-state='live'] {
+  color: #22c55e;
+}
+
+.camera__notice {
+  margin: 0;
+  max-width: 48ch;
+  color: #fcd34d;
+  font-size: 13px;
+  text-align: center;
+}
+
 .hint {
   margin: 0;
   color: var(--muted);
