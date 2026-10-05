@@ -5,10 +5,13 @@ its position and shape on any screen size, resolution, or orientation - and can
 be serialized and replayed on remote canvases later.
 */
 
-// The toolkit is intentionally small. Line and circle are dropped: they are
+// The toolkit is intentionally small. Line and arrow are dropped: they are
 // rarely the fastest way to mark a zone, and the highlight region covers the
 // cases where a precise shape was wanted without the UI clutter.
 export type Tool = 'pen' | 'highlight' | 'rect' | 'ellipse'
+
+/** Whether pointer events draw on the canvas or pass through to the video. */
+export type DrawMode = 'draw' | 'control'
 
 /** A single, ordered gesture - a stroke, a rectangle or a highlight region. */
 export interface Gesture {
@@ -39,10 +42,6 @@ const TOOL_GLYPH: Record<Tool, string> = {
   ellipse: '◯',
 }
 
-/** The subset of tools that behave like a freehand shape: points trace the
- * outline and the renderer fills between the first and last point. */
-export const SHAPES = ['pen', 'rect', 'ellipse'] as const
-
 /** All tools the host can draw with. */
 export const ALL_TOOLS = ['pen', 'highlight', 'rect', 'ellipse'] as const
 
@@ -51,17 +50,9 @@ export const DEFAULT_TOOL: Tool = 'pen'
 
 /** The default colour for new strokes. */
 export const DEFAULT_COLOR = '#ef4444'
+
+/** The colour palette offered in the sidebar. */
 export const COLORS = ['#ef4444', '#f59e0b', '#22c55e', '#3b82f6', '#a855f7', '#ffffff'] as const
-
-
-export const WOODLAND_COLORS = [
-  '#ef4444',
-  '#f59e0b',
-  '#22c55e',
-  '#3b82f6',
-  '#a855f7',
-  '#ffffff',
-] as const
 
 export function toolGlyph(tool: Tool): string {
   return TOOL_GLYPH[tool]
@@ -128,43 +119,18 @@ export function drawStroke(
     return
   }
 
-  if (stroke.tool === 'highlight') {
-    const x0 = Math.min(x(start), x(end))
-    const y0 = Math.min(y(start), y(end))
-    const x1 = Math.max(x(start), x(end))
-    const y1 = Math.max(y(start), y(end))
-    ctx.fillStyle = stroke.color + '55'
-    ctx.fillRect(x0, y0, x1 - x0, y1 - y0)
-    ctx.strokeStyle = stroke.color
-    ctx.lineWidth = Math.max(stroke.width, 1)
-    ctx.setLineDash([4, 4])
-    ctx.strokeRect(x0, y0, x1 - x0, y1 - y0)
-    ctx.setLineDash([])
-    return
-  }
-
-  // line | arrow
-  ctx.beginPath()
-  ctx.moveTo(x(start), y(start))
-  ctx.lineTo(x(end), y(end))
-  ctx.stroke()
-
-  if (stroke.tool === 'arrow') {
-    const angle = Math.atan2(y(end) - y(start), x(end) - x(start))
-    const head = Math.max(stroke.width * 3, 12)
-    ctx.beginPath()
-    ctx.moveTo(x(end), y(end))
-    ctx.lineTo(
-      x(end) - head * Math.cos(angle - Math.PI / 6),
-      y(end) - head * Math.sin(angle - Math.PI / 6),
-    )
-    ctx.moveTo(x(end), y(end))
-    ctx.lineTo(
-      x(end) - head * Math.cos(angle + Math.PI / 6),
-      y(end) - head * Math.sin(angle + Math.PI / 6),
-    )
-    ctx.stroke()
-  }
+  // The remaining tool is the highlight region.
+  const x0 = Math.min(x(start), x(end))
+  const y0 = Math.min(y(start), y(end))
+  const x1 = Math.max(x(start), x(end))
+  const y1 = Math.max(y(start), y(end))
+  ctx.fillStyle = stroke.color + '55'
+  ctx.fillRect(x0, y0, x1 - x0, y1 - y0)
+  ctx.strokeStyle = stroke.color
+  ctx.lineWidth = Math.max(stroke.width, 1)
+  ctx.setLineDash([4, 4])
+  ctx.strokeRect(x0, y0, x1 - x0, y1 - y0)
+  ctx.setLineDash([])
 }
 
 /** Redraws the committed strokes plus the in-progress draft. */

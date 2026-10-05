@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { classifyCameraError, type CameraProblem } from './mediaErrors'
 
 /**
- * Lifecycle of a screen capture:
+ * Lifecycle of a media capture:
  *
  * - `idle`        nothing captured; the user can start.
- * - `requesting`  the browser picker is open; a request is in flight.
+ * - `requesting`  the browser picker/permission prompt is open.
  * - `live`        a stream is bound and playing.
  * - `denied`      the browser refused: the user dismissed the picker or capture
  *                 permission is blocked. Recoverable — the user can retry.
@@ -12,7 +13,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
  */
 export type CaptureStatus = 'idle' | 'requesting' | 'live' | 'denied' | 'error'
 
-export interface DisplayCapture {
+export interface MediaCapture {
   status: CaptureStatus
   stream: MediaStream | null
   /** Human-readable explanation shown for the `denied` and `error` states. */
@@ -27,6 +28,10 @@ const DISPLAY_CONSTRAINTS: DisplayMediaStreamOptions = {
   video: { displaySurface: 'browser' },
   audio: true,
 }
+
+// Video only: the announcer mic is a separate input (see AudioMixer), so the
+// webcam's own microphone never doubles into the mix.
+const CAMERA_CONSTRAINTS: MediaStreamConstraints = { video: true, audio: false }
 
 function errorName(cause: unknown): string {
   return cause instanceof DOMException ? cause.name : cause instanceof Error ? cause.name : ''
@@ -80,14 +85,31 @@ export function classifyCaptureError(cause: unknown): {
   }
 }
 
+interface CaptureOptions {
+  /** Acquire the stream. Only valid from a user gesture. */
+  request: () => Promise<MediaStream>
+  /** Whether this browser exposes the API at all. */
+  isSupported: () => boolean
+  /** Notice shown for the `denied` and `error` states. */
+  classify: (cause: unknown) => CameraProblem | ReturnType<typeof classifyCaptureError>
+  /** Shown when a stream arrives without a video track. */
+  missingTrackNotice: string
+  /** Shown when the API itself is unavailable. */
+  unsupportedNotice: string
+}
+
 /**
- * Captures a user-selected tab/window/screen and exposes it as a MediaStream.
- *
- * Only the video track is used for now; the captured audio track is kept on the
- * stream for the future audio-mixing milestone. `getDisplayMedia` must be called
- * from a user gesture, so `start` is wired directly to a button click.
+ * One capture lifecycle for every kind of input: acquire a stream, bind it,
+ * and release it on stop, track-end, or unmount. Rejections are mapped to a
+ * deliberate UI state instead of thrown at the stage.
  */
-export function useDisplayCapture(): DisplayCapture {
+function useMediaCapture({
+  request,
+  isSupported,
+  classify,
+  missingTrackNotice,
+  unsupportedNotice,
+}: CaptureOptions): MediaCapture {
   const [status, setStatus] = useState<CaptureStatus>('idle')
   const [stream, setStream] = useState<MediaStream | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
@@ -113,12 +135,12 @@ export function useDisplayCapture(): DisplayCapture {
   }, [release])
 
   const start = useCallback(async () => {
-    // Guard double-start: ignore clicks while a picker is open or already live.
+    // Guard double-start: ignore clicks while a prompt is open or already live.
     if (busyRef.current || streamRef.current) return
 
-    if (typeof navigator.mediaDevices?.getDisplayMedia !== 'function') {
+    if (!isSupported()) {
       setStatus('error')
-      setNotice('Screen capture isn’t available in this browser.')
+      setNotice(unsupportedNotice)
       return
     }
 
@@ -128,9 +150,9 @@ export function useDisplayCapture(): DisplayCapture {
     setStatus('requesting')
 
     try {
-      const captured = await navigator.mediaDevices.getDisplayMedia(DISPLAY_CONSTRAINTS)
+      const captured = await request()
 
-      // A stop() or unmount happened while the picker was open: discard it.
+      // A stop() or unmount happened while the prompt was open: discard it.
       if (requestId !== requestRef.current || !mountedRef.current) {
         release(captured)
         return
@@ -140,11 +162,11 @@ export function useDisplayCapture(): DisplayCapture {
       if (!video) {
         release(captured)
         setStatus('error')
-        setNotice('The selected source didn’t provide a video track.')
+        setNotice(missingTrackNotice)
         return
       }
 
-      // The browser's own "Stop sharing" control ends the video track directly.
+      // The browser's own "Stop sharing" control ends the track directly.
       video.addEventListener('ended', () => {
         if (requestRef.current !== requestId) return
         requestRef.current += 1
@@ -165,14 +187,14 @@ export function useDisplayCapture(): DisplayCapture {
         setStatus('idle')
         setNotice(null)
       } else {
-        const { status: next, notice: text } = classifyCaptureError(cause)
+        const { status: next, notice: text } = classify(cause)
         setStatus(next)
         setNotice(text)
       }
     } finally {
       busyRef.current = false
     }
-  }, [release])
+  }, [classify, isSupported, missingTrackNotice, release, request, unsupportedNotice])
 
   useEffect(() => {
     mountedRef.current = true
@@ -185,4 +207,42 @@ export function useDisplayCapture(): DisplayCapture {
   }, [release])
 
   return { status, stream, notice, start, stop }
+}
+
+/**
+ * Captures a user-selected tab/window/screen and exposes it as a MediaStream.
+ *
+ * The captured audio track stays on the stream for the stage audio mixer.
+ * `getDisplayMedia` must be called from a user gesture, so `start` is wired
+ * directly to a button click.
+ */
+export function useDisplayCapture(): MediaCapture {
+  const isSupported = useCallback(
+    () => typeof navigator.mediaDevices?.getDisplayMedia === 'function',
+    [],
+  )
+  const request = useCallback(() => navigator.mediaDevices.getDisplayMedia(DISPLAY_CONSTRAINTS), [])
+  return useMediaCapture({
+    request,
+    isSupported,
+    classify: classifyCaptureError,
+    missingTrackNotice: 'The selected source didn’t provide a video track.',
+    unsupportedNotice: 'Screen capture isn’t available in this browser.',
+  })
+}
+
+/**
+ * Captures the host's own camera (webcam or built-in) as a stage source, so a
+ * laptop camera can sit beside a shared tab or a cameraman's phone feed.
+ */
+export function useCameraCapture(): MediaCapture {
+  const isSupported = useCallback(() => typeof navigator.mediaDevices?.getUserMedia === 'function', [])
+  const request = useCallback(() => navigator.mediaDevices.getUserMedia(CAMERA_CONSTRAINTS), [])
+  return useMediaCapture({
+    request,
+    isSupported,
+    classify: classifyCameraError,
+    missingTrackNotice: 'The camera didn’t provide a video track.',
+    unsupportedNotice: 'Camera capture isn’t available in this browser.',
+  })
 }

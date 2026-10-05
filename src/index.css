@@ -751,6 +751,18 @@ body {
 @media (max-width: 980px) {
   .stage {
     flex-direction: column;
+    /* Stacked content can be taller than the viewport: let it scroll instead
+       of clipping the stage. */
+    overflow-y: auto;
+  }
+
+  /* The stage keeps its 16:9 shape instead of collapsing to nothing when it
+     is stacked under the sidebars. */
+  .screen {
+    flex: 0 0 auto;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    max-height: 70vh;
   }
 
   .sidebar {

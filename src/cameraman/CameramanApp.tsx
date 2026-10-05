@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 import Peer, { type MediaConnection } from 'peerjs'
 import { parseCameraLink, type CameraSession } from '../lib/cameraLink'
+import { classifyCameraError } from '../lib/mediaErrors'
 import { peerOptions } from '../lib/peerConfig'
 
 type CameramanStatus =
@@ -25,29 +26,6 @@ const CAMERA_CONSTRAINTS: MediaStreamConstraints = {
  * this bound keeps a rejected cameraman from hanging on "connecting" forever.
  */
 const ACCEPT_TIMEOUT_MS = 12000
-
-/** Maps a getUserMedia rejection onto a deliberate cameraman state. */
-function cameraError(cause: unknown): { status: CameramanStatus; notice: string } {
-  const name = cause instanceof DOMException ? cause.name : cause instanceof Error ? cause.name : ''
-  switch (name) {
-    case 'NotAllowedError':
-    case 'SecurityError':
-      return {
-        status: 'denied',
-        notice: 'Camera access was blocked. Allow the camera for this site, then try again.',
-      }
-    case 'NotFoundError':
-    case 'OverconstrainedError':
-      return { status: 'error', notice: 'No camera was found on this device.' }
-    case 'NotReadableError':
-      return { status: 'error', notice: 'The camera is in use by another app.' }
-    default:
-      return {
-        status: 'error',
-        notice: cause instanceof Error && cause.message ? `Camera error: ${cause.message}` : 'Could not start the camera.',
-      }
-  }
-}
 
 /**
  * The lightweight cameraman page.
@@ -110,7 +88,7 @@ export default function CameramanApp() {
       }
       media = await navigator.mediaDevices.getUserMedia(CAMERA_CONSTRAINTS)
     } catch (cause) {
-      const { status: next, notice: text } = cameraError(cause)
+      const { status: next, notice: text } = classifyCameraError(cause)
       setStatus(next)
       setNotice(text)
       return

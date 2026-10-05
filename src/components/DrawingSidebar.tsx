@@ -1,16 +1,16 @@
 import { type Dispatch, type SetStateAction } from 'react'
-import { ALL_TOOLS, COLORS } from '../lib/telestration'
-import { INPUT_KINDS, type SupportedInput } from '../lib/cameraDevices'
-import type { Tool } from '../lib/telestration'
+import { ALL_TOOLS, COLORS, toolGlyph, type DrawMode, type Tool } from '../lib/telestration'
 
 /**
  * A compact, keyboard-driven tool palette that lives alongside the video in the
  * sidebar.
  *
- * The host can switch tool, colour and width without reaching for the mouse:
- * the shortcuts are listed in the legend on the right of the palette.
+ * The host can switch mode, tool, colour and width without reaching for the
+ * mouse: the shortcuts are listed in the legend under each section.
  */
 export function DrawingSidebar({
+  mode,
+  setMode,
   tool,
   setTool,
   color,
@@ -20,10 +20,9 @@ export function DrawingSidebar({
   canUndo,
   onUndo,
   onClear,
-  inputKind,
-  setInputKind,
-  deviceLabels,
 }: {
+  mode: DrawMode
+  setMode: Dispatch<SetStateAction<DrawMode>>
   tool: Tool
   setTool: Dispatch<SetStateAction<Tool>>
   color: string
@@ -33,36 +32,43 @@ export function DrawingSidebar({
   canUndo: boolean
   onUndo: () => void
   onClear: () => void
-  inputKind: SupportedInput
-  setInputKind: Dispatch<SetStateAction<SupportedInput>>
-  deviceLabels: Map<SupportedInput, string>
 }) {
-  /** Single device-select button, pulled out of JSX so `?.`/`??` parse cleanly. */
-  function deviceButton(kind: SupportedInput): JSX.Element {
-    const item = INPUT_KINDS.find((i) => i.kind === kind)
-    const isOn = inputKind === kind
-    return (
-      <button
-        key={kind}
-        type="button"
-        aria-label={`Use ${item?.label ?? kind}`}
-        aria-pressed={isOn}
-        data-testid={`sidebar-device-${kind}`}
-        className={`swatch ${isOn ? 'swatch--on' : ''}`}
-        style={{ background: item?.glyph ?? 'var(--panel-3)' }}
-        onClick={() => setInputKind(kind)}
-      >
-        {item?.glyph ?? '⌘'}
-      </button>
-    )
-  }
-
   return (
     <aside className="sidebar" data-testid="drawing-sidebar" aria-label="Drawing controls">
       <header className="sidebar__header">
         <h2>Draw</h2>
-        <p className="sidebar__hint">Tools, colour, width, undo, clear.</p>
+        <p className="sidebar__hint">Mode, tools, colour, width, undo, clear.</p>
       </header>
+
+      {/* Draw vs Control: whether the pointer draws or reaches the video. */}
+      <section className="panel">
+        <h3 className="panel__title">Mode</h3>
+        <div className="action-row">
+          <button
+            type="button"
+            className={`chip ${mode === 'draw' ? 'chip--on' : ''}`}
+            aria-pressed={mode === 'draw'}
+            data-testid="mode-draw"
+            onClick={() => setMode('draw')}
+            title="Drawing: the pointer draws on the canvas"
+          >
+            ✏️ Draw
+          </button>
+          <button
+            type="button"
+            className={`chip ${mode === 'control' ? 'chip--on' : ''}`}
+            aria-pressed={mode === 'control'}
+            data-testid="mode-control"
+            onClick={() => setMode('control')}
+            title="Video controls: clicks pass through to the video underneath"
+          >
+            🖱️ Control
+          </button>
+        </div>
+        <p className="panel__hint">
+          Control lets clicks reach the shared video; Draw keeps annotating.
+        </p>
+      </section>
 
       {/* Tool */}
       <section className="panel">
@@ -131,23 +137,6 @@ export function DrawingSidebar({
         </p>
       </section>
 
-      {/* Input & device */}
-      <section className="panel">
-        <h3 className="panel__title">Device</h3>
-        <div className="swatch-row">
-          {(Object.keys(INPUT_KINDS) as SupportedInput[]).map((kind) =>
-            deviceButton(kind)
-          )}
-        </div>
-        <p className="panel__hint">
-          {Array.from(deviceLabels.entries()).map(([k, label]) => (
-            <span key={k}>
-              {inputKind === k ? <strong>{label}</strong> : <label>{label}</label>}
-            </span>
-          ))}
-        </p>
-      </section>
-
       {/* Actions */}
       <section className="panel">
         <h3 className="panel__title">Actions</h3>
@@ -180,21 +169,4 @@ export function DrawingSidebar({
       </section>
     </aside>
   )
-}
-
-/**
- * Tiny, deterministic glyph helper that keeps the tool icons inline with the
- * renderer and avoids relying on emoji fallbacks in the sidebar buttons.
- */
-function toolGlyph(tool: Tool): string {
-  switch (tool) {
-    case 'pen':
-      return '✎'
-    case 'highlight':
-      return '⎘'
-    case 'rect':
-      return '▭'
-    case 'ellipse':
-      return '◯'
-  }
 }

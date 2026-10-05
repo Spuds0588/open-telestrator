@@ -1,10 +1,19 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useDisplayCapture } from './lib/capture'
+import { useDisplayCapture, useCameraCapture, type CaptureStatus } from './lib/capture'
 import { useHostCamera } from './lib/useHostCamera'
-import type { StageSource } from './lib/sources'
-import { COLORS } from './lib/telestration'
+import { useAudioMixer } from './lib/useAudioMixer'
+import { mergeStageSources } from './lib/sources'
 import { qrOf } from './lib/qrcode'
-import { scanDevices, type SupportedInput } from './lib/cameraDevices'
+import { inputStatusText, type InputPhase, type SupportedInput } from './lib/cameraDevices'
+import type { MicStatus } from './lib/audio'
+import {
+  COLORS,
+  DEFAULT_COLOR,
+  DEFAULT_TOOL,
+  type DrawMode,
+  type Stroke,
+  type Tool,
+} from './lib/telestration'
 import { DrawingSidebar } from './components/DrawingSidebar'
 import { VideoFeeds } from './components/VideoFeeds'
 import { VideoStage } from './components/VideoStage'
@@ -32,94 +41,94 @@ function prevWidth(current: number): number {
   return current <= 2 ? 2 : current - 1
 }
 
+/** Map a capture lifecycle onto the sidebar's coarse input phase. */
+function capturePhase(status: CaptureStatus): InputPhase {
+  switch (status) {
+    case 'requesting':
+      return 'requesting'
+    case 'live':
+      return 'live'
+    case 'denied':
+    case 'error':
+      return 'problem'
+    default:
+      return 'off'
+  }
+}
+
+/** Map the microphone lifecycle onto the sidebar's coarse input phase. */
+function micPhase(status: MicStatus): InputPhase {
+  switch (status) {
+    case 'requesting':
+      return 'requesting'
+    case 'on':
+      return 'live'
+    case 'denied':
+    case 'error':
+      return 'problem'
+    default:
+      return 'off'
+  }
+}
+
 export default function App() {
   const capture = useDisplayCapture()
+  const webcam = useCameraCapture()
   const camera = useHostCamera()
   const busy = capture.status === 'requesting'
   const live = capture.status === 'live'
 
-  // The stage's inputs: the host's shared screen first, then every cameraman
-  // currently streaming in. Exactly one of these is the program at a time.
-  const [sources] = useState<StageSource[]>([])
+  // The stage's inputs, in program order: the host's shared screen, the host's
+  // own camera, then every cameraman currently streaming in. Exactly one of
+  // these is the program at a time.
+  const sources = useMemo(
+    () => mergeStageSources(capture.stream, webcam.stream, camera.sources),
+    [capture.stream, webcam.stream, camera.sources],
+  )
 
-  // Device selection: which physical input the host wants to draw on top of.
-  // The host picks the *kind* (screen, camera, audio) and the app starts the
-  // matching capture; `deviceLabels` hold the human-readable choices in the
-  // sidebar so the host can switch without reopening the capture picker.
-  const [inputKind, setInputKind] = useState<SupportedInput>('screen')
-  const initialDeviceLabels = new Map<SupportedInput, string>([
-    ['screen', 'Screen (tab or window)'],
-    ['camera', 'Camera (phone or webcam)'],
-    ['audio', 'Audio (microphone)'],
-  ])
-  const [deviceLabels, setDeviceLabels] = useState<Map<SupportedInput, string>>(initialDeviceLabels)
   // Keep the selection valid: default to the first source and fall back when the
   // selected one disappears (capture stopped, cameraman hung up).
   const [selectedId, setSelectedId] = useState<string | null>(null)
-  // Keep the selection valid: default to the first source and fall back when the
-  // selected one disappears (capture stopped, cameraman hung up).
   useEffect(() => {
-    if (!selectedId || !sources.some((source) => source.id === selectedId)) {
-      setSelectedId(sources[0]?.id ?? null)
-    }
+    if (selectedId && sources.some((source) => source.id === selectedId)) return
+    setSelectedId(sources[0]?.id ?? null)
   }, [sources, selectedId])
 
   const selected = sources.find((source) => source.id === selectedId) ?? null
 
-  // Enumerate the host's actual devices once on start, then refresh after every
-  // capture / cameraman teardown so a newly plugged-in webcam or mic shows up.
-  // The snapshot is merged over the existing labels (never cleared) so a
-  // freshly plugged-in device is added without dropping what was already
-  // listed.
-  useEffect(() => {
-    let cancelled = false
-    scanDevices()
-      .then((snapshot) => {
-        if (!cancelled) {
-          if (!cancelled) {
-            setDeviceLabels((prev) => {
-              const next = new Map(prev)
-              for (const [kind, label] of snapshot.labels) next.set(kind, label)
-              return next
-            })
-          }
-        }
-      })
-      .catch(() => undefined)
-    return () => {
-      cancelled = true
-    }
-  }, [])
+  // Audio is owned here (not by the stage) so the input picker can switch the
+  // announcer mic on; the mixer follows whichever source is on the program.
+  const audio = useAudioMixer(selected?.stream ?? null)
 
-  // Re-run the device snapshot whenever we (re)start a capture, so a newly
-  // attached camera or mic is listed shortly after the host selects it.
-  useEffect(() => {
-    let cancelled = false
-    scanDevices()
-      .then((snapshot) => {
-        if (!cancelled) {
-          setDeviceLabels((prev) => {
-            const next = new Map(prev)
-            for (const [kind, label] of snapshot.labels) next.set(kind, label)
-            return next
-          })
-        }
-      })
-      .catch(() => undefined)
-    return () => {
-      cancelled = true
-    }
-  }, [inputKind])
+  // Device selection: the host picks the input kind and the matching capture
+  // starts. Screen and camera become stage sources; audio joins the mix.
+  const [inputKind, setInputKind] = useState<SupportedInput>('screen')
+  const selectDevice = useCallback(
+    (kind: SupportedInput) => {
+      setInputKind(kind)
+      if (kind === 'screen') void capture.start()
+      else if (kind === 'camera') void webcam.start()
+      else if (audio.micStatus !== 'on') void audio.enableMic()
+    },
+    [capture.start, webcam.start, audio.enableMic, audio.micStatus],
+  )
+  const devicePhase: Record<SupportedInput, InputPhase> = {
+    screen: capturePhase(capture.status),
+    camera: capturePhase(webcam.status),
+    audio: micPhase(audio.micStatus),
+  }
+  const deviceStatus = inputStatusText(inputKind, devicePhase[inputKind])
 
   // Drawing state owned by the host (see DrawingSidebar / TelestrationOverlay).
-  const [tool, setTool] = useState<import('./lib/telestration').Tool>('pen')
-  const [color, setColor] = useState<string>('#ef4444')
+  const [mode, setMode] = useState<DrawMode>('draw')
+  const [tool, setTool] = useState<Tool>(DEFAULT_TOOL)
+  const [color, setColor] = useState<string>(DEFAULT_COLOR)
   const [width, setWidth] = useState(4)
 
   // QR code for the cameraman link so a phone can scan this page and join the
   // broadcast without typing a long magic link.
   const [qr, setQr] = useState<string | null>(null)
-  useMemo(() => {
+  useEffect(() => {
     if (!camera.link) {
       setQr(null)
       return
@@ -135,9 +144,9 @@ export default function App() {
 
   // The host-owned stroke stack. `past` holds the committed strokes (most-recent)
   // and `_future` holds strokes undone so the host can redo them with Shift+Z.
-  const [past, setPast] = useState<import('./lib/telestration').Stroke[]>([])
-  const [_future, setFuture] = useState<import('./lib/telestration').Stroke[]>([])
-  const commitStroke = useCallback((stroke: import('./lib/telestration').Stroke) => {
+  const [past, setPast] = useState<Stroke[]>([])
+  const [_future, setFuture] = useState<Stroke[]>([])
+  const commitStroke = useCallback((stroke: Stroke) => {
     setPast((prev) => [...prev, stroke])
     setFuture([])
   }, [])
@@ -167,9 +176,7 @@ export default function App() {
 
   const canUndo = past.length > 0
 
-  // --- Keyboard shortcuts (driven by the host's drawing state) ---------------
-  // Read the latest tool/colour/width so the document-level keydown handler
-  // can translate keys into the host's drawing state.
+  // --- Keyboard shortcuts ---------------------------------------------------
   const handleKeyDown = useCallback(
     (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null
@@ -235,7 +242,7 @@ export default function App() {
           break
       }
     },
-    [handleRedo, handleUndo, handleClear, setTool, setColor, setWidth, color, width],
+    [handleRedo, handleUndo, handleClear, color, width],
   )
 
   useEffect(() => {
@@ -284,8 +291,10 @@ export default function App() {
       </header>
 
       <main className="stage">
-        {/* The drawing tools now live in the sidebar, beside the video. */}
+        {/* The drawing tools live in the left sidebar, beside the video. */}
         <DrawingSidebar
+          mode={mode}
+          setMode={setMode}
           tool={tool}
           setTool={setTool}
           color={color}
@@ -295,12 +304,9 @@ export default function App() {
           canUndo={canUndo}
           onUndo={handleUndo}
           onClear={handleClear}
-          inputKind={inputKind}
-          setInputKind={setInputKind}
-          deviceLabels={deviceLabels}
         />
 
-        {/* Input feeds + cameraman pairing live in the same sidebar. */}
+        {/* Input feeds + device picker + cameraman pairing. */}
         <VideoFeeds
           sources={sources}
           selectedId={selectedId}
@@ -308,8 +314,8 @@ export default function App() {
           camera={camera}
           qr={qr}
           inputKind={inputKind}
-          setInputKind={setInputKind}
-          deviceLabels={deviceLabels}
+          onSelectKind={selectDevice}
+          deviceStatus={deviceStatus}
         />
 
         {/* The canvas sits inside the stage; its strokes are owned by App. */}
@@ -319,15 +325,16 @@ export default function App() {
           tool={tool}
           color={color}
           width={width}
+          mode={mode}
+          audio={audio}
           onStrokeCommitted={commitStroke}
         />
       </main>
 
       <p className="hint">
-        Share a browser tab, then draw over it. The tools, sources and cameraman
-        controls are all in the sidebar; switch to <strong>Control</strong> to let
-        clicks reach the video, and back to <strong>Draw</strong> to keep
-        annotating. Invite a cameraman to add a phone camera as a second source.
+        Share a browser tab, start the camera or mic from <strong>Inputs</strong>, then draw over
+        the program. Use <strong>Draw</strong> to annotate and <strong>Control</strong> to let
+        clicks reach the video. Invite a cameraman to add a phone camera as another source.
       </p>
     </div>
   )

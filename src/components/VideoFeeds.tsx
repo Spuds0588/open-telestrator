@@ -1,19 +1,16 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useHostCamera } from '../lib/useHostCamera'
 import type { StageSource } from '../lib/sources'
-import { INPUT_KINDS, type SupportedInput, kindIsSelectable } from '../lib/cameraDevices'
+import { INPUT_KINDS, type SupportedInput } from '../lib/cameraDevices'
 
 /**
- * The left sidebar holds two halves:
+ * The right sidebar: every stage input and the cameraman pairing.
  *
- *   1. The input-feed viewer — a live mini-preview of every source on the
- *      program and every cameraman currently streaming, plus the host's own
- *      screen/camera switch and the magic-link that invites a cameraman.
- *   2. The drawing sidebar — tool, colour, width, undo and clear, all in the
- *      same column so the host never loses sight of the stage.
- *
- * Only the selected feed reaches the stage; the previews are for browsing,
- * not for switching the program by themselves.
+ *   1. Feed — a mini preview of the shared screen, the host camera and every
+ *      cameraman currently streaming; the selected one is the program.
+ *   2. Device — bring an input group onto the stage (share a tab, start the
+ *      camera, enable the mic) with its current state spelled out.
+ *   3. Cameraman — mint the magic link and show its QR code.
  */
 export function VideoFeeds({
   sources,
@@ -22,8 +19,8 @@ export function VideoFeeds({
   camera,
   qr,
   inputKind,
-  setInputKind,
-  deviceLabels,
+  onSelectKind,
+  deviceStatus,
 }: {
   sources: StageSource[]
   selectedId: string | null
@@ -31,35 +28,14 @@ export function VideoFeeds({
   camera: ReturnType<typeof useHostCamera>
   qr: string | null
   inputKind: SupportedInput
-  setInputKind: (kind: SupportedInput) => void
-  deviceLabels: Map<SupportedInput, string>
+  onSelectKind: (kind: SupportedInput) => void
+  deviceStatus: string
 }) {
-  /** Single device-select button, pulled out of JSX so `?.`/`??` parse cleanly. */
-  function deviceButton(kind: SupportedInput, disabled: boolean): JSX.Element {
-    const item = INPUT_KINDS.find((i) => i.kind === kind)
-    const isOn = inputKind === kind
-    return (
-      <button
-        key={kind}
-        type="button"
-        aria-label={`Use ${item?.label ?? kind}`}
-        aria-pressed={isOn}
-        data-testid={`feeds-device-${kind}`}
-        className={`swatch ${isOn ? 'swatch--on' : ''}`}
-        style={{ background: item?.glyph ?? 'var(--panel-3)' }}
-        onClick={() => setInputKind(kind)}
-        disabled={disabled}
-      >
-        {item ? item.glyph : '—'}
-      </button>
-    )
-  }
-
   return (
     <aside className="sidebar" data-testid="video-feeds" aria-label="Video feeds and inputs">
       <header className="sidebar__header">
         <h2>Inputs</h2>
-        <p className="sidebar__hint">Pick which source is on the program, and invite a cameraman.</p>
+        <p className="sidebar__hint">Pick the program source, start a device, invite a cameraman.</p>
       </header>
 
       <div className="feed-panel">
@@ -71,26 +47,38 @@ export function VideoFeeds({
         ) : (
           <div className="feed-cards">
             {sources.map((source) => (
-              <SourceCard key={source.id} source={source} selected={selectedId === source.id} onSelect={onSelect} />
+              <SourceCard
+                key={source.id}
+                source={source}
+                selected={selectedId === source.id}
+                onSelect={onSelect}
+              />
             ))}
           </div>
         )}
       </div>
 
-      {/* Device selection: choose which physical video device to draw over. */}
+      {/* Device selection: bring an input onto the stage. */}
       <div className="feed-panel">
         <span className="feed-panel__label">Device</span>
         <div className="swatch-row">
-          {(Object.keys(INPUT_KINDS) as SupportedInput[]).map((kind) =>
-            deviceButton(kind, kindIsSelectable(kind))
-          )}
-        </div>
-        <p className="panel__hint">
-          {Array.from(deviceLabels.entries()).map(([k, label]) => (
-            <span key={k}>
-              {inputKind === k ? <strong>{label}</strong> : <label>{label}</label>}
-            </span>
+          {INPUT_KINDS.map((item) => (
+            <button
+              key={item.kind}
+              type="button"
+              aria-label={`Use ${item.label}`}
+              aria-pressed={inputKind === item.kind}
+              data-testid={`feeds-device-${item.kind}`}
+              title={item.hint}
+              className={`swatch swatch--icon ${inputKind === item.kind ? 'swatch--on' : ''}`}
+              onClick={() => onSelectKind(item.kind)}
+            >
+              {item.glyph}
+            </button>
           ))}
+        </div>
+        <p className="panel__hint" data-testid="device-status" role="status">
+          {deviceStatus}
         </p>
       </div>
 
@@ -178,10 +166,24 @@ function SourceCard({
  * object-fit: contain so a tab, a phone camera or a game capture never crops.
  */
 function Preview({ src }: { src: StageSource }) {
+  const videoRef = useRef<HTMLVideoElement>(null)
   const [loaded, setLoaded] = useState(false)
+
+  useEffect(() => {
+    const video = videoRef.current
+    if (!video) return
+    setLoaded(false)
+    video.srcObject = src.stream
+    void video.play().catch(() => undefined)
+    return () => {
+      video.srcObject = null
+    }
+  }, [src.stream])
+
   return (
     <div className="feed-card__frame">
       <video
+        ref={videoRef}
         className="feed-card__video"
         playsInline
         muted

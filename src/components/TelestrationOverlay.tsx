@@ -1,5 +1,13 @@
 import { useCallback, useEffect, useRef } from 'react'
-import { clamp01, renderStrokes, type Gesture, type Point, type Tool, type Stroke } from '../lib/telestration'
+import {
+  clamp01,
+  renderStrokes,
+  type DrawMode,
+  type Gesture,
+  type Point,
+  type Tool,
+  type Stroke,
+} from '../lib/telestration'
 
 /**
  * The telestration canvas laid over the video.
@@ -18,16 +26,19 @@ export function TelestrationOverlay({
   tool,
   color,
   width,
+  mode,
   onStrokeCommitted,
 }: {
   /** Committed, replayable strokes, owned by the host (App). */
   strokes: Stroke[]
-  /** The active drawing tool (for the canvas active class). */
+  /** The active drawing tool. */
   tool: Tool
   /** The active colour (used while a gesture is in progress). */
   color: string
   /** The active stroke width (used while a gesture is in progress). */
   width: number
+  /** Draw: the canvas takes pointer events. Control: they pass through. */
+  mode: DrawMode
   /** Called once per completed gesture with the gesture to commit. */
   onStrokeCommitted: (gesture: Gesture & { id: string }) => void
 }) {
@@ -121,7 +132,7 @@ export function TelestrationOverlay({
     <div className="overlay">
       <canvas
         ref={canvasRef}
-        className={`overlay__canvas ${tool === 'pen' ? 'overlay__canvas--active' : ''}`}
+        className={`overlay__canvas ${mode === 'draw' ? 'overlay__canvas--active' : ''}`}
         data-testid="telestration-canvas"
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
