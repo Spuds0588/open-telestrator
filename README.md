@@ -8,18 +8,20 @@ Free & open-source sports telestrator & P2P broadcasting studio. Draw over any l
 
 ## Status
 
-Browser PWA MVP — **capture, telestration, instant replay, stage audio, and a
-magic-link cameraman feed**.
-The stage takes three kinds of input: a shared screen, the host's own webcam and
-any cameraman feeds; the **Device** row in the sidebar starts the screen, camera
-or mic, and the **Feed** list switches which source is on the program. A canvas
-overlay draws straight on top of the video, and a rolling buffer replays the last
-several seconds at 0.5×. The stage mixes the announcer mic and the captured tab's
-audio, each on its own volume and mute with a live level meter. A host can mint a
-link that turns someone's phone into an extra camera source (see below).
-Everything lives in one compact sidebar on the right, and keyboard shortcuts are
-shown as badges on the controls they belong to.
-Shared-drawing collaboration is not built yet.
+Desktop-only browser PWA — **capture, telestration, instant replay, stage audio,
+and a magic-link cameraman feed**.
+Everything lives in one compact sidebar on the right: the drawing tools; an
+**Input** stack that shares a tab, starts the host camera and invites
+cameraman(s), with every live feed listed as a clickable thumbnail; the **Audio**
+mixer (announcer mic and captured tab audio, each with mute, volume and a live
+level meter); and **Instant replay**. The 16:9 stage is scaled with `transform`
+to fit, so the video keeps its ratio without squeezing the sidebar, and the
+telestration canvas draws straight on top. Cameraman invites open a large QR
+dialog with a copyable link. Keyboard shortcuts are badges on the controls they
+belong to.
+Phones and tablets are not supported by this web app and get a notice pointing
+at the GitHub releases instead; the cameraman and viewer pages still work on any
+device. Shared-drawing collaboration is not built yet.
 
 ## Cameraman magic link
 
@@ -58,9 +60,9 @@ npm run preview    # serve the production build
 ```
 
 Open the app, click **Share a tab**, pick a browser tab, then draw. Use the
-**Device** row to add the host camera or the announcer mic, and the **Feed**
-list to switch the program source. Use **🎥 Invite a cameraman** to add a phone
-camera as another source.
+**Input** stack to add the host camera or invite a cameraman; click any feed in
+the list to put it on the program. The **Audio** section enables and mixes the
+announcer mic, and **Replay** plays the last several seconds at 0.5×.
 
 ## Hosting
 

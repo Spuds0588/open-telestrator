@@ -1,6 +1,6 @@
 import type { ReplayController } from '../lib/useReplay'
 
-/** Replay affordances shown over the stage, next to the drawing toolbar. */
+/** Instant-replay affordances in the sidebar. */
 export function ReplayControls({
   available,
   windowSeconds,
@@ -18,20 +18,22 @@ export function ReplayControls({
     >
       {replaying ? (
         <>
-          <span className="replay__badge" title="Slow motion">
-            0.5×
-          </span>
+          <div className="replay__row">
+            <span className="replay__badge" title="Slow motion">
+              0.5×
+            </span>
+            <button
+              type="button"
+              className="chip"
+              data-testid="replay-toggle"
+              onClick={togglePlay}
+            >
+              {paused ? '▶ Play' : '⏸ Pause'}
+            </button>
+          </div>
           <button
             type="button"
-            className="chip"
-            data-testid="replay-toggle"
-            onClick={togglePlay}
-          >
-            {paused ? '▶ Play' : '⏸ Pause'}
-          </button>
-          <button
-            type="button"
-            className="chip chip--on"
+            className="chip chip--wide"
             data-testid="replay-live"
             onClick={returnToLive}
           >
@@ -42,7 +44,7 @@ export function ReplayControls({
         <>
           <button
             type="button"
-            className="chip"
+            className="chip chip--wide"
             data-testid="replay-start"
             disabled={!available}
             onClick={startReplay}

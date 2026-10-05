@@ -1,25 +1,36 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState, type RefObject } from 'react'
 import { TelestrationOverlay } from './TelestrationOverlay'
-import { ReplayControls } from './ReplayControls'
-import { AudioControls } from './AudioControls'
-import { REPLAY_RATE, useReplay } from '../lib/useReplay'
-import type { AudioController } from '../lib/useAudioMixer'
+import { REPLAY_RATE } from '../lib/useReplay'
+import type { ReplayClip } from '../lib/replay'
 import { type Stroke, type Tool, type Gesture } from '../lib/telestration'
 
+/** Logical stage size (16:9). The whole frame is scaled with `transform` to fit
+ * the available area, so the video keeps its ratio and the sidebar's width is
+ * never affected by the stage's content. */
+const STAGE_WIDTH = 1280
+const STAGE_HEIGHT = 720
+
 /** The 16:9 stage: the captured video (or a replay of it) with the telestration
- * canvas layered on top and the replay/audio controls in the corner. */
+ * canvas layered on top. Replay and audio render in the sidebar. */
 export function VideoStage({
   stream,
+  videoRef,
+  clip,
+  replaying,
   past,
   tool,
   color,
   width,
-  audio,
   onStrokeCommitted,
 }: {
   stream: MediaStream | null
-  /** Committed strokes owned by the host (App). The canvas paints these
-   * imperatively and re-paints whenever the list changes. */
+  /** The stage video element, shared with the replay controller in App. */
+  videoRef: RefObject<HTMLVideoElement>
+  /** The replay clip currently playing, or null for live video. */
+  clip: ReplayClip | null
+  /** Whether the stage is showing a replay (suppresses the empty state). */
+  replaying: boolean
+  /** Committed strokes owned by the host (App). */
   past: Stroke[]
   /** The active drawing tool. */
   tool: Tool
@@ -27,14 +38,28 @@ export function VideoStage({
   color: string
   /** The active stroke width. */
   width: number
-  /** Stage audio controls, owned by App so the input picker can use them. */
-  audio: AudioController
   /** Called once per completed gesture with the gesture to commit. */
   onStrokeCommitted: (gesture: Gesture & { id: string }) => void
 }) {
-  const videoRef = useRef<HTMLVideoElement>(null)
-  const replay = useReplay(stream, videoRef)
-  const clip = replay.clip
+  const screenRef = useRef<HTMLDivElement>(null)
+  const [scale, setScale] = useState(1)
+
+  // Fit the logical frame into the stage area, preserving the 16:9 ratio. The
+  // frame is laid out at its logical size and scaled, so it can never push the
+  // sidebar or overflow the stage.
+  useEffect(() => {
+    const host = screenRef.current
+    if (!host) return
+    const measure = () => {
+      const { width, height } = host.getBoundingClientRect()
+      if (width <= 0 || height <= 0) return
+      setScale(Math.min(width / STAGE_WIDTH, height / STAGE_HEIGHT))
+    }
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(host)
+    return () => observer.disconnect()
+  }, [])
 
   // One binding effect for both modes: the same element shows live video via
   // `srcObject`, and a replay via a blob URL at half speed.
@@ -69,21 +94,28 @@ export function VideoStage({
     return () => {
       video.srcObject = null
     }
-  }, [stream, clip])
+  }, [stream, clip, videoRef])
 
   return (
-    <div className="screen" data-testid="screen">
-      <video ref={videoRef} className="screen__video" muted playsInline />
-      {!stream && !replay.replaying && <div className="screen__empty">No signal</div>}
-      <TelestrationOverlay
-        strokes={past}
-        tool={tool}
-        color={color}
-        width={width}
-        onStrokeCommitted={onStrokeCommitted}
-      />
-      <ReplayControls {...replay} />
-      <AudioControls {...audio} />
+    <div className="screen" data-testid="screen" ref={screenRef}>
+      <div className="screen__media">
+        <div
+          className="screen__frame"
+          data-testid="stage-frame"
+          data-scale={scale.toFixed(4)}
+          style={{ transform: `scale(${scale})` }}
+        >
+          <video ref={videoRef} className="screen__video" muted playsInline />
+          {!stream && !replaying && <div className="screen__empty">No signal</div>}
+          <TelestrationOverlay
+            strokes={past}
+            tool={tool}
+            color={color}
+            width={width}
+            onStrokeCommitted={onStrokeCommitted}
+          />
+        </div>
+      </div>
     </div>
   )
 }

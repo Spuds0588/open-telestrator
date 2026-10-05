@@ -1,11 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useDisplayCapture, useCameraCapture, type CaptureStatus } from './lib/capture'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useDisplayCapture, useCameraCapture } from './lib/capture'
 import { useHostCamera } from './lib/useHostCamera'
 import { useAudioMixer } from './lib/useAudioMixer'
+import { useReplay } from './lib/useReplay'
 import { mergeStageSources } from './lib/sources'
 import { qrOf } from './lib/qrcode'
-import { inputStatusText, type InputPhase, type SupportedInput } from './lib/cameraDevices'
-import type { MicStatus } from './lib/audio'
 import {
   COLORS,
   DEFAULT_COLOR,
@@ -32,42 +31,13 @@ function prevColor(current: string): string {
   return COLORS[(index - 1 + COLORS.length) % COLORS.length] as string
 }
 
-/** Map a capture lifecycle onto the sidebar's coarse input phase. */
-function capturePhase(status: CaptureStatus): InputPhase {
-  switch (status) {
-    case 'requesting':
-      return 'requesting'
-    case 'live':
-      return 'live'
-    case 'denied':
-    case 'error':
-      return 'problem'
-    default:
-      return 'off'
-  }
-}
-
-/** Map the microphone lifecycle onto the sidebar's coarse input phase. */
-function micPhase(status: MicStatus): InputPhase {
-  switch (status) {
-    case 'requesting':
-      return 'requesting'
-    case 'on':
-      return 'live'
-    case 'denied':
-    case 'error':
-      return 'problem'
-    default:
-      return 'off'
-  }
-}
+/** The web app is desktop-only; phones and tablets get a notice instead. */
+const GITHUB_URL = 'https://github.com/Spuds0588/open-telestrator'
 
 export default function App() {
   const capture = useDisplayCapture()
   const webcam = useCameraCapture()
   const camera = useHostCamera()
-  const busy = capture.status === 'requesting'
-  const live = capture.status === 'live'
 
   // The stage's inputs, in program order: the host's shared screen, the host's
   // own camera, then every cameraman currently streaming in. Exactly one of
@@ -87,28 +57,20 @@ export default function App() {
 
   const selected = sources.find((source) => source.id === selectedId) ?? null
 
-  // Audio is owned here (not by the stage) so the input picker can switch the
-  // announcer mic on; the mixer follows whichever source is on the program.
+  // Audio and replay are owned here so their controls can live in the sidebar.
   const audio = useAudioMixer(selected?.stream ?? null)
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const replay = useReplay(selected?.stream ?? null, videoRef)
 
-  // Device selection: the host picks the input kind and the matching capture
-  // starts. Screen and camera become stage sources; audio joins the mix.
-  const [inputKind, setInputKind] = useState<SupportedInput>('screen')
-  const selectDevice = useCallback(
-    (kind: SupportedInput) => {
-      setInputKind(kind)
-      if (kind === 'screen') void capture.start()
-      else if (kind === 'camera') void webcam.start()
-      else if (audio.micStatus !== 'on') void audio.enableMic()
-    },
-    [capture.start, webcam.start, audio.enableMic, audio.micStatus],
-  )
-  const devicePhase: Record<SupportedInput, InputPhase> = {
-    screen: capturePhase(capture.status),
-    camera: capturePhase(webcam.status),
-    audio: micPhase(audio.micStatus),
-  }
-  const deviceStatus = inputStatusText(inputKind, devicePhase[inputKind])
+  const toggleScreen = useCallback(() => {
+    if (capture.status === 'live') capture.stop()
+    else void capture.start()
+  }, [capture.status, capture.stop, capture.start])
+
+  const toggleCamera = useCallback(() => {
+    if (webcam.status === 'live') webcam.stop()
+    else void webcam.start()
+  }, [webcam.status, webcam.stop, webcam.start])
 
   // Drawing state owned by the host (see Sidebar / TelestrationOverlay). The
   // stroke width is fixed in the web MVP; a settings panel can expose it later.
@@ -116,7 +78,7 @@ export default function App() {
   const [color, setColor] = useState<string>(DEFAULT_COLOR)
   const width = DEFAULT_WIDTH
 
-  // QR code for the cameraman link so a phone can scan this page and join the
+  // QR code for the cameraman link so a phone can scan the dialog and join the
   // broadcast without typing a long magic link.
   const [qr, setQr] = useState<string | null>(null)
   useEffect(() => {
@@ -231,76 +193,59 @@ export default function App() {
   }, [handleKeyDown])
 
   return (
-    <div className="app">
-      <header className="topbar">
-        <div className="brand">
-          <span className="brand__dot" aria-hidden="true" />
-          <h1>Open Telestrator</h1>
-        </div>
-        <div className="topbar__actions" data-state={capture.status} data-testid="capture-state">
-          {capture.notice && (
-            <span
-              className={`status status--${capture.status === 'denied' ? 'denied' : 'error'}`}
-              role="alert"
-            >
-              {capture.notice}
-            </span>
-          )}
-          {live ? (
-            <button
-              type="button"
-              className="btn btn--ghost"
-              data-testid="stop-capture"
-              onClick={capture.stop}
-            >
-              Stop sharing
-            </button>
-          ) : (
-            <button
-              type="button"
-              className="btn"
-              data-testid="start-capture"
-              aria-busy={busy}
-              disabled={busy}
-              onClick={() => void capture.start()}
-            >
-              {busy ? 'Waiting for selection…' : 'Share a tab'}
-            </button>
-          )}
-        </div>
-      </header>
+    <>
+      <div className="app">
+        <main className="stage">
+          {/* The canvas sits inside the stage; its strokes are owned by App. */}
+          <VideoStage
+            stream={selected?.stream ?? null}
+            videoRef={videoRef}
+            clip={replay.clip}
+            replaying={replay.replaying}
+            past={past}
+            tool={tool}
+            color={color}
+            width={width}
+            onStrokeCommitted={commitStroke}
+          />
 
-      <main className="stage">
-        {/* The canvas sits inside the stage; its strokes are owned by App. */}
-        <VideoStage
-          stream={selected?.stream ?? null}
-          past={past}
-          tool={tool}
-          color={color}
-          width={width}
-          audio={audio}
-          onStrokeCommitted={commitStroke}
-        />
+          {/* Tools, inputs, audio, replay and cameraman pairing. */}
+          <Sidebar
+            tool={tool}
+            setTool={setTool}
+            color={color}
+            setColor={setColor}
+            canUndo={canUndo}
+            onUndo={handleUndo}
+            onClear={handleClear}
+            screenStatus={capture.status}
+            onToggleScreen={toggleScreen}
+            screenNotice={capture.notice}
+            webcamStatus={webcam.status}
+            onToggleCamera={toggleCamera}
+            webcamNotice={webcam.notice}
+            camera={camera}
+            qr={qr}
+            sources={sources}
+            selectedId={selectedId}
+            onSelect={setSelectedId}
+            audio={audio}
+            replay={replay}
+          />
+        </main>
+      </div>
 
-        {/* Tools, inputs and cameraman pairing in one compact column. */}
-        <Sidebar
-          tool={tool}
-          setTool={setTool}
-          color={color}
-          setColor={setColor}
-          canUndo={canUndo}
-          onUndo={handleUndo}
-          onClear={handleClear}
-          sources={sources}
-          selectedId={selectedId}
-          onSelect={setSelectedId}
-          camera={camera}
-          qr={qr}
-          inputKind={inputKind}
-          onSelectKind={selectDevice}
-          deviceStatus={deviceStatus}
-        />
-      </main>
-    </div>
+      {/* Desktop-only: mobile and tablet viewports get this instead of the app. */}
+      <div className="unsupported" data-testid="unsupported-notice">
+        <h1>Open Telestrator is a desktop app</h1>
+        <p>
+          The web telestrator needs a desktop browser. Mobile and tablet builds are planned as
+          separate apps — follow the project on GitHub for release news.
+        </p>
+        <a className="btn" href={GITHUB_URL} target="_blank" rel="noreferrer">
+          View on GitHub
+        </a>
+      </div>
+    </>
   )
 }

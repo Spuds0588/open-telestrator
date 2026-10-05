@@ -1,16 +1,19 @@
 import { useEffect, useRef, useState } from 'react'
+import type { CaptureStatus } from '../lib/capture'
 import { useHostCamera } from '../lib/useHostCamera'
 import type { StageSource } from '../lib/sources'
-import { INPUT_KINDS, type SupportedInput } from '../lib/cameraDevices'
+import type { AudioController } from '../lib/useAudioMixer'
+import type { ReplayController } from '../lib/useReplay'
 import { ALL_TOOLS, COLORS, toolGlyph, type Tool } from '../lib/telestration'
+import { AudioControls } from './AudioControls'
+import { ReplayControls } from './ReplayControls'
+import { QrModal } from './QrModal'
 
 /**
- * The single control sidebar, on the right of the stage.
- *
- * Everything the host touches lives here as one compressed column: the drawing
- * tools, the input picker with its live feed list, and the cameraman pairing.
- * Keyboard shortcuts are shown as small badges on the controls they belong to
- * instead of a separate legend.
+ * The single control sidebar, on the right of the stage: drawing tools, the
+ * input stack (share a tab, camera, cameraman and every live feed), the audio
+ * mixer and replay. Keyboard shortcuts are badges on the controls they belong
+ * to instead of a legend.
  */
 export function Sidebar({
   tool,
@@ -20,14 +23,19 @@ export function Sidebar({
   canUndo,
   onUndo,
   onClear,
+  screenStatus,
+  onToggleScreen,
+  screenNotice,
+  webcamStatus,
+  onToggleCamera,
+  webcamNotice,
+  camera,
+  qr,
   sources,
   selectedId,
   onSelect,
-  camera,
-  qr,
-  inputKind,
-  onSelectKind,
-  deviceStatus,
+  audio,
+  replay,
 }: {
   tool: Tool
   setTool: (tool: Tool) => void
@@ -36,15 +44,37 @@ export function Sidebar({
   canUndo: boolean
   onUndo: () => void
   onClear: () => void
+  screenStatus: CaptureStatus
+  onToggleScreen: () => void
+  screenNotice: string | null
+  webcamStatus: CaptureStatus
+  onToggleCamera: () => void
+  webcamNotice: string | null
+  camera: ReturnType<typeof useHostCamera>
+  qr: string | null
   sources: StageSource[]
   selectedId: string | null
   onSelect: (id: string) => void
-  camera: ReturnType<typeof useHostCamera>
-  qr: string | null
-  inputKind: SupportedInput
-  onSelectKind: (kind: SupportedInput) => void
-  deviceStatus: string
+  audio: AudioController
+  replay: ReplayController
 }) {
+  // The QR dialog opens as soon as a cameraman link is minted, and can be
+  // reopened from the input buttons later.
+  const [showQr, setShowQr] = useState(false)
+  useEffect(() => {
+    if (camera.link) setShowQr(true)
+  }, [camera.link])
+
+  const screenLabel =
+    screenStatus === 'live' ? 'Stop sharing' : screenStatus === 'requesting' ? 'Waiting…' : 'Share a tab'
+  const webcamLabel =
+    webcamStatus === 'live' ? 'Stop camera' : webcamStatus === 'requesting' ? 'Starting…' : 'Camera'
+  const cameramanLabel = camera.link
+    ? '🎥 Show QR'
+    : camera.status === 'opening'
+      ? 'Connecting…'
+      : '🎥 Cameraman'
+
   return (
     <aside className="sidebar" data-testid="sidebar" aria-label="Controls">
       <section className="side-group">
@@ -105,26 +135,60 @@ export function Sidebar({
       </section>
 
       <section className="side-group">
-        <h2 className="side-title">Inputs</h2>
-        <div className="row">
-          {INPUT_KINDS.map((item) => (
-            <button
-              key={item.kind}
-              type="button"
-              aria-label={`Use ${item.label}`}
-              aria-pressed={inputKind === item.kind}
-              data-testid={`feeds-device-${item.kind}`}
-              title={item.hint}
-              className={`icon-btn ${inputKind === item.kind ? 'icon-btn--on' : ''}`}
-              onClick={() => onSelectKind(item.kind)}
-            >
-              {item.glyph}
-            </button>
-          ))}
+        <h2 className="side-title">Input</h2>
+        <div className="btn-grid">
+          <button
+            type="button"
+            className="chip chip--wide"
+            data-testid="start-capture"
+            aria-busy={screenStatus === 'requesting'}
+            disabled={screenStatus === 'requesting'}
+            onClick={onToggleScreen}
+          >
+            {screenLabel}
+          </button>
+          <button
+            type="button"
+            className="chip"
+            data-testid="webcam-toggle"
+            aria-busy={webcamStatus === 'requesting'}
+            disabled={webcamStatus === 'requesting'}
+            onClick={onToggleCamera}
+          >
+            {webcamLabel}
+          </button>
+          <button
+            type="button"
+            className="chip"
+            data-testid="create-camera-link"
+            disabled={camera.status === 'opening'}
+            onClick={camera.link ? () => setShowQr(true) : camera.createLink}
+          >
+            {cameramanLabel}
+          </button>
         </div>
-        <p className="side-status" data-testid="device-status" role="status">
-          {deviceStatus}
-        </p>
+        {camera.link && (
+          <div className="row">
+            <button type="button" className="chip" data-testid="camera-stop" onClick={camera.stop}>
+              Stop cameraman
+            </button>
+          </div>
+        )}
+        {screenNotice && (
+          <p className="side-note" data-testid="screen-notice" role="alert">
+            {screenNotice}
+          </p>
+        )}
+        {webcamNotice && (
+          <p className="side-note" data-testid="webcam-notice" role="alert">
+            {webcamNotice}
+          </p>
+        )}
+        {camera.notice && (
+          <p className="side-note" data-testid="camera-notice" role="alert">
+            {camera.notice}
+          </p>
+        )}
         {sources.length === 0 ? (
           <span className="side-empty" data-testid="feeds-empty">
             No feeds yet
@@ -144,57 +208,23 @@ export function Sidebar({
       </section>
 
       <section className="side-group">
-        <h2 className="side-title">Cameraman</h2>
-        {camera.link ? (
-          <>
-            <input
-              className="link-input"
-              data-testid="camera-link"
-              readOnly
-              value={camera.link}
-              aria-label="Cameraman link"
-              onFocus={(event) => event.currentTarget.select()}
-            />
-            <div className="qr" data-testid="camera-qr">
-              {qr ? (
-                <img src={qr} alt="Scan to join the camera broadcast" />
-              ) : (
-                <span className="side-empty">QR</span>
-              )}
-            </div>
-            <div className="row">
-              <button
-                type="button"
-                className="chip"
-                data-testid="camera-copy"
-                onClick={() =>
-                  void navigator.clipboard?.writeText(camera.link ?? '').catch(() => undefined)
-                }
-              >
-                Copy
-              </button>
-              <button type="button" className="chip" data-testid="camera-stop" onClick={camera.stop}>
-                Stop
-              </button>
-            </div>
-          </>
-        ) : (
-          <button
-            type="button"
-            className="chip"
-            data-testid="create-camera-link"
-            disabled={camera.status === 'opening'}
-            onClick={camera.createLink}
-          >
-            {camera.status === 'opening' ? 'Connecting…' : '🎥 Invite a cameraman'}
-          </button>
-        )}
-        {camera.notice && (
-          <span className="side-note" data-testid="camera-notice" role="alert">
-            {camera.notice}
-          </span>
-        )}
+        <h2 className="side-title">Audio</h2>
+        <AudioControls {...audio} />
       </section>
+
+      <section className="side-group">
+        <h2 className="side-title">Replay</h2>
+        <ReplayControls {...replay} />
+      </section>
+
+      {showQr && camera.link && (
+        <QrModal
+          title="Cameraman link"
+          url={camera.link}
+          qr={qr}
+          onClose={() => setShowQr(false)}
+        />
+      )}
     </aside>
   )
 }
