@@ -81,6 +81,11 @@ runs the tests before building, so a failing test blocks the deploy to prod.
 - **The web app is desktop-only.** Phones and tablets get the unsupported notice
   pointing at GitHub releases. The cameraman (`?camera=`) and viewer (`?watch=`)
   entries are code-split in `src/main.tsx` and must keep working on phones.
+- **A viewer page in somebody else's page goes bare.** The viewer drops this
+  app's chrome when it is framed or linked from another origin (`wantsEmbed` in
+  `src/lib/broadcast.ts`), so an embed needs no URL parameter; the `embed`
+  parameter stays as an explicit override. Keep that logic in the lib with its
+  tests rather than reading `window` in the component.
 - **Click-through "Control" mode belongs to the Tauri build, not this one**, where
   the canvas always draws and never passes input to the page underneath.
 - Broadcasting is deliberately live-only: no catch-up, no synchronisation between

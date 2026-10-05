@@ -17,20 +17,54 @@
 export const WATCH_PARAM = 'watch'
 
 /**
- * Asking a viewer link for the bare layout, for pages that embed the feed.
- * A portal putting the picture on its own page wants the video and its controls,
- * not this app's status chrome around it.
+ * Query parameter that answers the embed question outright, for pages that
+ * want to be sure: any value but `0`/`false` asks for the bare layout, and
+ * `0`/`false` keeps the viewer page even inside a frame.
  */
 export const EMBED_PARAM = 'embed'
 
-/** Whether a viewer link asks to be shown as an embed. */
-export function wantsEmbed(href: string): boolean {
+/** The origin of an absolute URL, or null when it cannot be read. */
+function originOf(href: string): string | null {
   try {
-    const value = new URL(href).searchParams.get(EMBED_PARAM)
-    return value !== null && value !== '0' && value !== 'false'
+    return new URL(href).origin
   } catch {
-    return false
+    return null
   }
+}
+
+export type EmbedSignals = {
+  /** The viewer page's own address. */
+  href: string
+  /** True when this document sits inside a frame or object element. */
+  framed: boolean
+  /** Where the browser says the page was linked from; often empty. */
+  referrer: string
+}
+
+/**
+ * Whether the viewer page should render as an embed: the picture and its
+ * controls, without this app's own chrome around them.
+ *
+ * `embed` in the link answers explicitly either way. Without it the page reads
+ * its surroundings: a document inside a frame, or linked from another origin,
+ * is part of someone else's page, so it goes bare. Our own pages — and a link
+ * opened by hand — keep the full viewer.
+ */
+export function wantsEmbed({ href, framed, referrer }: EmbedSignals): boolean {
+  let url: URL | null = null
+  try {
+    url = new URL(href)
+  } catch {
+    url = null
+  }
+
+  const asked = url?.searchParams.get(EMBED_PARAM) ?? null
+  if (asked !== null) return asked !== '0' && asked !== 'false'
+
+  if (framed) return true
+
+  const from = originOf(referrer)
+  return from !== null && url !== null && from !== url.origin
 }
 
 /** Viewer children a single node (host or relay) will accept. */

@@ -54,24 +54,42 @@ describe('viewer links', () => {
 })
 
 describe('wantsEmbed', () => {
-  it('recognises an embed link however it is spelled', () => {
-    expect(wantsEmbed(`https://x.test/?watch=h&t=k&${EMBED_PARAM}=1`)).toBe(true)
-    expect(wantsEmbed(`https://x.test/?watch=h&t=k&${EMBED_PARAM}=`)).toBe(true)
-    expect(wantsEmbed(`https://x.test/?watch=h&t=k&${EMBED_PARAM}=true`)).toBe(true)
+  const link = 'https://spuds0588.github.io/open-telestrator/?watch=h&t=k'
+
+  it('lets the link answer outright either way', () => {
+    const ask = (value: string, framed = false, referrer = 'https://portal.test/') =>
+      wantsEmbed({ href: `${link}&${EMBED_PARAM}=${value}`, framed, referrer })
+    expect(ask('1')).toBe(true)
+    expect(ask('')).toBe(true)
+    expect(ask('true')).toBe(true)
+    // An explicit no wins even where the surroundings look like an embed.
+    expect(ask('0', true)).toBe(false)
+    expect(ask('false', true, 'https://portal.test/')).toBe(false)
   })
 
-  it('leaves an ordinary viewer link alone', () => {
-    expect(wantsEmbed('https://x.test/?watch=h&t=k')).toBe(false)
-    expect(wantsEmbed(`https://x.test/?watch=h&t=k&${EMBED_PARAM}=0`)).toBe(false)
-    expect(wantsEmbed(`https://x.test/?watch=h&t=k&${EMBED_PARAM}=false`)).toBe(false)
-    expect(wantsEmbed('not a url')).toBe(false)
+  it('embeds a framed page even with nothing in the link', () => {
+    expect(wantsEmbed({ href: link, framed: true, referrer: '' })).toBe(true)
+    expect(wantsEmbed({ href: link, framed: true, referrer: link })).toBe(true)
+  })
+
+  it('embeds a page linked from another origin', () => {
+    expect(wantsEmbed({ href: link, framed: false, referrer: 'https://portal.test/live' })).toBe(true)
+  })
+
+  it('keeps the full viewer on our own pages and for direct visits', () => {
+    expect(wantsEmbed({ href: link, framed: false, referrer: '' })).toBe(false)
+    expect(wantsEmbed({ href: link, framed: false, referrer: link })).toBe(false)
+    expect(wantsEmbed({ href: link, framed: false, referrer: 'not a url' })).toBe(false)
+    // An unreadable link cannot even prove it is ours; stay put.
+    expect(wantsEmbed({ href: 'not a url', framed: false, referrer: 'https://portal.test/' })).toBe(
+      false,
+    )
   })
 
   it('survives an embed flag riding along with the session', () => {
-    const link = buildViewerLink('https://x.test/', { hostId: 'h', token: 'k' })
-    const embed = `${link}&${EMBED_PARAM}=1`
-    expect(parseViewerLink(embed)).toEqual({ hostId: 'h', token: 'k' })
-    expect(wantsEmbed(embed)).toBe(true)
+    const embedded = `${buildViewerLink('https://x.test/', { hostId: 'h', token: 'k' })}&${EMBED_PARAM}=1`
+    expect(parseViewerLink(embedded)).toEqual({ hostId: 'h', token: 'k' })
+    expect(wantsEmbed({ href: embedded, framed: false, referrer: '' })).toBe(true)
   })
 })
 

@@ -107,8 +107,18 @@ export default function ViewerApp() {
    */
   const [status, setStatus] = useState<ViewerStatus>(() => (session ? 'connecting' : 'ready'))
   const [notice, setNotice] = useState<string | null>(null)
-  /** True when the link asks for the bare layout a host page can iframe. */
-  const [embed] = useState(() => wantsEmbed(window.location.href))
+  /**
+   * True when this page is somebody else's embed: the link says so outright,
+   * or the page works it out from where it is running — inside a frame, or
+   * linked from another origin.
+   */
+  const [embed] = useState(() =>
+    wantsEmbed({
+      href: window.location.href,
+      framed: window.self !== window.top,
+      referrer: document.referrer,
+    }),
+  )
   const [stream, setStream] = useState<MediaStream | null>(null)
   const [parentId, setParentId] = useState<string | null>(null)
   const [children, setChildren] = useState(0)

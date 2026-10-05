@@ -93,6 +93,8 @@ picture-in-picture, and cast where the browser offers it — with a live indicat
 that turns amber the moment the picture is no longer live. Clicking the picture
 toggles playback, and Space/K, M, F and the arrow keys do what they do everywhere
 else. Status is a small chip in the corner rather than a bar under the video.
+Opened inside someone else's page, the viewer goes bare and shows the player
+alone — see **Embedding the feed** below.
 
 **Picture-in-picture keeps its controls.** Where the browser has Document
 Picture-in-Picture, the ⧉ button moves the whole player — picture, controls and
@@ -120,12 +122,13 @@ picture-in-picture are the browser's own APIs and depend on it permitting them.
 
 A viewer link goes straight into an `iframe`, which is what a portal or a
 community page wants: gate the page yourself, and let the picture play inside
-it. Add `embed=1` to drop this app's own chrome — the frame gets the picture and
-the player controls, and nothing else.
+it. The viewer page notices that it is framed — or that it was linked from
+another site — and drops this app's own chrome, so the frame gets the picture
+and the player controls, and nothing else.
 
 ```html
 <iframe
-  src="https://Spuds0588.github.io/open-telestrator/?watch=HOST_ID&t=TOKEN&embed=1"
+  src="https://Spuds0588.github.io/open-telestrator/?watch=HOST_ID&t=TOKEN"
   width="960"
   height="540"
   allow="autoplay; fullscreen; picture-in-picture"
@@ -133,10 +136,11 @@ the player controls, and nothing else.
 ></iframe>
 ```
 
-The link works as it is; `embed=1` only changes what the viewer page draws. The
-feed still starts on its own, and the status chip appears only when something
-needs attention. The app serves no frame headers of its own, so whether a page
-may be framed is entirely the embedding page's business.
+Nothing else is needed: the feed starts on its own, and the status chip appears
+only when something needs attention. If you prefer to spell it out, `embed=1`
+forces the bare layout from anywhere and `embed=0` keeps the full viewer page
+even inside a frame. The app serves no frame headers of its own, so whether a
+page may be framed is entirely the embedding page's business.
 
 ## Development
 
