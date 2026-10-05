@@ -315,6 +315,113 @@ body {
   width: 100%;
 }
 
+/* A chip that is on — a camera that is running, a feed being shown. */
+.chip--on {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+/* A file picker dressed as a chip. */
+.chip--file {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.chip--file input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* Opened feeds: one removable tag each. */
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  padding: 3px 4px 3px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel-2);
+  font-size: 11px;
+  overflow: hidden;
+}
+
+.tag button {
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  padding: 0 4px;
+  cursor: pointer;
+}
+
+.tag button:hover {
+  color: var(--text);
+}
+
+/* Sidebar field rows (the corner-camera picker). */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.field__label {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.field__select {
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  padding: 6px 8px;
+  border-radius: 7px;
+}
+
+.side-hint {
+  font-size: 10px;
+  color: var(--muted);
+}
+
+/* Transport for an opened file or stream. */
+.transport {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.transport__time {
+  font-size: 11px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.transport__seek {
+  width: 100%;
+  accent-color: var(--accent);
+}
+
+.side-status {
+  font-size: 12px;
+}
+
 /* Capture buttons: Share a tab spans the row, Camera and Cameraman split it. */
 .btn-grid {
   display: grid;
@@ -428,6 +535,48 @@ body {
   height: 100%;
   object-fit: contain;
   background: #000;
+}
+
+/* Corner overlays: 16:9 boxes in the stage's own 1280×720 coordinates,
+   mirroring the broadcast compositor's geometry (src/lib/composite.ts) — the
+   host sees exactly what viewers are sent. */
+.screen__corner {
+  position: absolute;
+  right: 2.5%;
+  width: 30%;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  background: #000;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.screen__corner--live {
+  top: 2.5%;
+}
+
+.screen__corner--cam {
+  bottom: 2.5%;
+}
+
+.screen__corner-video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.screen__corner-tag {
+  position: absolute;
+  left: 6px;
+  top: 6px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
 }
 
 .screen__empty {

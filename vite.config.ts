@@ -48,6 +48,9 @@ export default defineConfig({
         // network) rather than the studio shell.
         navigateFallback: 'app.html',
         navigateFallbackDenylist: [homeUrl],
+        // hls.js is only fetched when a playlist is opened, so it must not sit
+        // in the precache: an installed app would download it for everyone.
+        globIgnores: ['**/hls-*.js'],
       },
     }),
   ],
@@ -56,6 +59,11 @@ export default defineConfig({
       input: {
         home: 'index.html',
         app: 'app.html',
+      },
+      output: {
+        // A stable name so the workbox glob above can keep it out of the
+        // precache; the import stays dynamic either way.
+        manualChunks: (id) => (id.includes('node_modules/hls.js') ? 'hls' : undefined),
       },
     },
   },

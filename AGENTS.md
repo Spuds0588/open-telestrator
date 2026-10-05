@@ -52,7 +52,7 @@ found it, and say in your summary what you cleaned.
 
 ```bash
 npm run dev        # dev server (http://localhost:5173)
-npm test           # Vitest, run once (81 tests)
+npm test           # Vitest, run once (104 tests)
 npm run typecheck  # tsc --noEmit
 npm run build      # typecheck + production build (also emits the service worker)
 npm run preview    # serve the production build
@@ -67,8 +67,21 @@ runs the tests before building, so a failing test blocks the deploy to prod.
 - **Pure logic goes in `src/lib/*.ts` with a sibling `*.test.ts`.** React glue
   (hooks, `use*` modules) and components stay thin. Anything that broke once —
   source merging, camera links, stroke geometry, replay rotation, error
-  classification, peer config, the broadcast protocol — has unit tests; keep it
-  that way when you change those paths.
+  classification, peer config, the broadcast protocol, compositor geometry,
+  media-feed classification, hardware mappings — has unit tests; keep it that
+  way when you change those paths.
+- **The stage is the program.** While broadcasting, `useProgramCompositor`
+  redraws the stage — video, live corner, corner camera, strokes — into the one
+  canvas stream viewers receive, so drawings and overlays are on air. Draw
+  strokes into it with `drawStroke`, never `renderStrokes`: that helper clears
+  its canvas first and would wipe the video frame underneath. The corner boxes
+  exist twice on purpose — `cornerBox` in `src/lib/composite.ts` and
+  `.screen__corner` in `index.css` — keep their geometry in step.
+- **A media element cannot be a long-lived source via `captureStream()`**: its
+  track is removed for good the moment a file ends. Opened files and streams are
+  therefore re-drawn onto a canvas (`useMediaFeeds`), which also keeps the last
+  frame on screen. Their audio is routed through the mixer as a media-element
+  source, not through the capture.
 - **One error classifier per concern, shared.** `classifyCameraError` and its
   friends live in `src/lib/mediaErrors.ts` and are used by both the host and the
   cameraman page; do not fork a copy.
@@ -98,7 +111,8 @@ runs the tests before building, so a failing test blocks the deploy to prod.
   the canvas always draws and never passes input to the page underneath.
 - Broadcasting is deliberately live-only: no catch-up, no synchronisation between
   viewers. A steady picture per viewer is the goal, so keep the self-healing
-  paths (host sweep, viewer rejoin) intact.
+  paths (host sweep, viewer rejoin) intact. The *program* may contain replays
+  and overlays, but viewers still join at the live edge — do not add buffering.
 - Match the existing style: 2-space indent, no semicolons, single quotes,
   functional components, British-ish spelling in user-facing copy ("colour").
 - Do not commit, push, or open a PR unless asked to.

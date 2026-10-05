@@ -10,11 +10,27 @@ import { type Stroke, type Tool, type Gesture } from '../lib/telestration'
 const STAGE_WIDTH = 1280
 const STAGE_HEIGHT = 720
 
+/** One overlay video bound to a stream, muted: the mixer owns all audio. */
+function bindOverlay(video: HTMLVideoElement | null, stream: MediaStream | null): (() => void) | void {
+  if (!video) return
+  video.srcObject = stream
+  if (stream) void video.play().catch(() => undefined)
+  return () => {
+    video.srcObject = null
+  }
+}
+
 /** The 16:9 stage: the captured video (or a replay of it) with the telestration
- * canvas layered on top. Replay and audio render in the sidebar. */
+ * canvas layered on top, plus the corner overlays — the live program while a
+ * replay plays, and the commentator's corner camera. These corners sit exactly
+ * where the broadcast compositor draws them. Replay and audio render in the
+ * sidebar. */
 export function VideoStage({
   stream,
   videoRef,
+  liveRef,
+  cornerStream,
+  cornerRef,
   clip,
   replaying,
   past,
@@ -26,6 +42,12 @@ export function VideoStage({
   stream: MediaStream | null
   /** The stage video element, shared with the replay controller in App. */
   videoRef: RefObject<HTMLVideoElement>
+  /** The live-program corner, shown while a replay plays. */
+  liveRef: RefObject<HTMLVideoElement>
+  /** The chosen corner camera's stream, if one is selected. */
+  cornerStream: MediaStream | null
+  /** The corner camera's element, drawn by the broadcast compositor. */
+  cornerRef: RefObject<HTMLVideoElement>
   /** The replay clip currently playing, or null for live video. */
   clip: ReplayClip | null
   /** Whether the stage is showing a replay (suppresses the empty state). */
@@ -96,6 +118,14 @@ export function VideoStage({
     }
   }, [stream, clip, videoRef])
 
+  // The live corner keeps the program playing while the stage shows a replay.
+  // It only exists while a replay is on, so `replaying` re-runs the binding
+  // once the element has mounted.
+  useEffect(() => bindOverlay(liveRef.current, stream), [stream, liveRef, replaying])
+
+  // The corner camera plays whenever one is chosen, replay or not.
+  useEffect(() => bindOverlay(cornerRef.current, cornerStream), [cornerStream, cornerRef])
+
   return (
     <div className="screen" data-testid="screen" ref={screenRef}>
       <div className="screen__media">
@@ -106,6 +136,17 @@ export function VideoStage({
           style={{ transform: `scale(${scale})` }}
         >
           <video ref={videoRef} className="screen__video" muted playsInline />
+          {cornerStream && (
+            <div className="screen__corner screen__corner--cam" data-testid="stage-corner-cam">
+              <video ref={cornerRef} className="screen__corner-video" muted playsInline />
+            </div>
+          )}
+          {replaying && stream && (
+            <div className="screen__corner screen__corner--live" data-testid="stage-live-corner">
+              <video ref={liveRef} className="screen__corner-video" muted playsInline />
+              <span className="screen__corner-tag">LIVE</span>
+            </div>
+          )}
           {!stream && !replaying && <div className="screen__empty">No signal</div>}
           <TelestrationOverlay
             strokes={past}

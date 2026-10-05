@@ -9,22 +9,26 @@ Free & open-source sports telestrator & P2P broadcasting studio. Draw over any l
 ## Status
 
 Desktop-only browser PWA — **capture, telestration, instant replay, stage audio,
-a magic-link cameraman feed, and a viewer broadcast that fans the program out
-to phones as a PeerJS tree**.
+a magic-link cameraman feed, opened video files and streams, and a viewer
+broadcast that fans the composited program out to phones as a PeerJS tree**.
 Everything lives in one compact sidebar on the right: the drawing tools; an
-**Input** stack that shares a tab, starts the host camera and invites
-cameraman(s), with every live feed listed as a clickable thumbnail; the **Audio**
-mixer (announcer mic and captured tab audio, each with mute, volume and a live
-level meter); and **Instant replay**. The 16:9 stage is scaled with `transform`
-to fit, so the video keeps its ratio without squeezing the sidebar, and the
-telestration canvas draws straight on top. Cameraman invites open a large QR
-dialog with a copyable link. Keyboard shortcuts are badges on the controls they
+**Input** stack that shares a tab, opens any of the host's own cameras (an array
+of USB cameras shows up as several previewable feeds), takes a dropped-in video
+file or an HLS/MP4 stream URL, and invites cameraman(s) — every live feed listed
+as a clickable thumbnail; a **Program** group with the on-air corner camera and
+the transport for an opened file; the **Audio** mixer (announcer mic and captured
+program audio, each with mute, volume and a live level meter); **Instant
+replay**; **Broadcast**; and **Hardware** triggers. The 16:9 stage is scaled with
+`transform` to fit, so the video keeps its ratio without squeezing the sidebar,
+and the telestration canvas draws straight on top. Cameraman invites open a large
+QR dialog with a copyable link. Keyboard shortcuts are badges on the controls they
 belong to.
 The **Broadcast** group goes live to viewers and shows how many are watching; the
 same count is reported to any connected co-host.
 Phones and tablets are not supported by this web app and get a notice pointing
 at the GitHub releases instead; the cameraman and viewer pages still work on any
-device. Shared-drawing collaboration is not built yet.
+device. Shared-drawing collaboration (a second person drawing on the host's
+canvas) is not built yet.
 
 ## Cameraman magic link
 
@@ -54,15 +58,55 @@ VITE_PEER_SECURE=true
 VITE_ICE_SERVERS='[{"urls":"stun:stun.example.com:3478"},{"urls":"turn:turn.example.com","username":"u","credential":"p"}]'
 ```
 
+## Inputs: cameras, files and streams
+
+**Cameras.** Every `videoinput` the machine reports is listed under Input; each
+one opens independently, stays running while you work the others, and appears in
+the feed list with its own live thumbnail. One of them is the program; any other
+can sit in the corner (see **On air** below). Device labels appear once the
+browser has been granted a camera.
+
+**Files and streams.** **Open file** takes any video the browser can play and
+puts it on the stage as an ordinary source, with a transport in the sidebar
+(play, pause, scrub, restart) since the telestration canvas covers the picture.
+A pasted URL works too: progressive MP4/WebM plays natively, HLS (`.m3u8`) uses
+`hls.js`, which is fetched only when a playlist is actually opened.
+
+Two honest limits. **RTSP and RTMP cannot play in a browser at all** — that is
+what VLC is for — so those links are refused with a notice rather than failing
+silently. And a remote stream must allow this page (CORS), because the feed is
+drawn to a canvas on its way to viewers; a server that refuses is reported
+rather than turning the broadcast black.
+
+## On air: the program picture
+
+**The stage is the program.** While the broadcast is live, everything the host
+sees — the selected video, the corner camera, the live corner during a replay,
+and the telestration strokes — is drawn onto one canvas whose stream goes out to
+viewers. That is what puts the drawing in front of the audience: strokes are not
+a local annotation, they are the broadcast.
+
+- **Corner camera.** Pick any source under **Program → Corner camera** and it
+sits in the right-hand corner of the programme, for viewers as well as for the
+host — the commentator's own webcam, or a second angle.
+- **Live corner.** Start an instant replay and the live feed stays in the
+top-right corner while the replay plays big, so nobody misses the next moment.
+Replays therefore reach viewers too: the programme follows the stage.
+
+The composited track keeps its identity while you switch sources, replay or
+draw, so viewers are not re-connected every time you change something. While the
+host's tab is in the background the picture is rebuilt once a second rather than
+freezing: a slideshow, not a still frame, until the tab is visible again.
+
 ## Broadcasting viewers
 
 Click **Broadcast → Go live to viewers** to mint a viewer link (use **Show QR**
 to put a big scannable code on screen). Viewers open the link and are watching
 straight away — the page joins the tree on its own, with no Watch button to
-find. They get the program video plus the stage audio mix, and nothing else — no
-scrubber, no catch-up. A late joiner sees the frames that arrive after it
-connects, and its picture drifts independently of everyone else's. There is no
-shared timeline to fall behind.
+find. They get the composited program picture plus the stage audio mix, and
+nothing else — no scrubber, no catch-up. A late joiner sees the frames that
+arrive after it connects, and its picture drifts independently of everyone
+else's. There is no shared timeline to fall behind.
 
 Viewers are arranged as a **tree**, so the host's uplink stays at two streams no
 matter how many people watch. Every viewer is also a relay: the host places a
@@ -142,6 +186,15 @@ forces the bare layout from anywhere and `embed=0` keeps the full viewer page
 even inside a frame. The app serves no frame headers of its own, so whether a
 page may be framed is entirely the embedding page's business.
 
+## Hardware triggers
+
+Gamepads, USB pedals and button boxes are polled with the Gamepad API — no
+permission needed — and MIDI pads or foot controllers are one opt-in away under
+**Hardware**. Buttons flip to the next/previous source, start a replay, return
+to live, undo and clear. A Stream Deck needs no integration at all: point its
+keys at the same shortcuts the app already listens for (`[`, `]`, `R`, `L`, `Z`,
+`Delete`, `1`–`4`, `C`, `X`).
+
 ## Pages and addresses
 
 There are two pages, both produced by the multi-page Vite build:
@@ -172,9 +225,13 @@ npm run preview    # serve the production build
 
 `npm run dev` serves the landing page at `/` and the studio at `/app.html`.
 Open the studio, click **Share a tab**, pick a browser tab, then draw. Use the
-**Input** stack to add the host camera or invite a cameraman; click any feed in
-the list to put it on the program. The **Audio** section enables and mixes the
-announcer mic, and **Replay** plays the last several seconds at 0.5×.
+**Input** stack to open a camera, drop in a video file or stream URL, or invite
+a cameraman; click any feed in the list to put it on the program. The **Audio**
+section enables and mixes the announcer mic, and **Replay** plays the last
+several seconds at 0.5×.
+
+Shortcuts: `1`–`4` tools, `C`/`X` colour, `Z` undo, `Delete` clear, `[`/`]`
+previous/next source, `R` replay (play/pause while replaying), `L` back to live.
 
 ## Hosting
 

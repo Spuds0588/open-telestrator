@@ -1,6 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import type { CaptureStatus } from '../lib/capture'
 import { useHostCamera } from '../lib/useHostCamera'
+import type { HostCameras } from '../lib/useHostCameras'
+import type { MediaFeeds } from '../lib/useMediaFeeds'
+import type { HardwareController } from '../lib/useHardware'
+import { HARDWARE_HINT } from '../lib/hardware'
 import type { StageSource } from '../lib/sources'
 import type { AudioController } from '../lib/useAudioMixer'
 import type { ReplayController } from '../lib/useReplay'
@@ -8,14 +12,15 @@ import type { BroadcastController } from '../lib/useBroadcast'
 import { useQrCode } from '../lib/useQrCode'
 import { ALL_TOOLS, COLORS, toolGlyph, type Tool } from '../lib/telestration'
 import { AudioControls } from './AudioControls'
+import { MediaTransport } from './MediaTransport'
 import { ReplayControls } from './ReplayControls'
 import { QrModal } from './QrModal'
 
 /**
  * The single control sidebar, on the right of the stage: drawing tools, the
- * input stack (share a tab, camera, cameraman and every live feed), the audio
- * mixer and replay. Keyboard shortcuts are badges on the controls they belong
- * to instead of a legend.
+ * input stack (a shared tab, the host's cameras, opened videos, the cameraman
+ * and every live feed), the program's corner camera, the audio mixer, replay,
+ * broadcast and the hardware triggers.
  */
 export function Sidebar({
   tool,
@@ -28,14 +33,16 @@ export function Sidebar({
   screenStatus,
   onToggleScreen,
   screenNotice,
-  webcamStatus,
-  onToggleCamera,
-  webcamNotice,
+  cameras,
+  media,
   camera,
   qr,
   sources,
   selectedId,
   onSelect,
+  cornerId,
+  onCornerChange,
+  hardware,
   audio,
   replay,
   broadcast,
@@ -51,14 +58,16 @@ export function Sidebar({
   screenStatus: CaptureStatus
   onToggleScreen: () => void
   screenNotice: string | null
-  webcamStatus: CaptureStatus
-  onToggleCamera: () => void
-  webcamNotice: string | null
+  cameras: HostCameras
+  media: MediaFeeds
   camera: ReturnType<typeof useHostCamera>
   qr: string | null
   sources: StageSource[]
   selectedId: string | null
   onSelect: (id: string) => void
+  cornerId: string | null
+  onCornerChange: (id: string | null) => void
+  hardware: HardwareController
   audio: AudioController
   replay: ReplayController
   broadcast: BroadcastController
@@ -68,15 +77,17 @@ export function Sidebar({
   // reopened from the input buttons later.
   const [showQr, setShowQr] = useState(false)
   const [showWatchQr, setShowWatchQr] = useState(false)
+  const [streamUrl, setStreamUrl] = useState('')
   const viewerQr = useQrCode(broadcast.link)
   useEffect(() => {
     if (camera.link) setShowQr(true)
   }, [camera.link])
 
+  // The transport only makes sense for an opened file or stream.
+  const selectedMedia = media.feeds.find((feed) => feed.id === selectedId) ?? null
+
   const screenLabel =
     screenStatus === 'live' ? 'Stop sharing' : screenStatus === 'requesting' ? 'Waiting…' : 'Share a tab'
-  const webcamLabel =
-    webcamStatus === 'live' ? 'Stop camera' : webcamStatus === 'requesting' ? 'Starting…' : 'Camera'
   const cameramanLabel = camera.link
     ? '🎥 Show QR'
     : camera.status === 'opening'
@@ -158,23 +169,96 @@ export function Sidebar({
           <button
             type="button"
             className="chip"
-            data-testid="webcam-toggle"
-            aria-busy={webcamStatus === 'requesting'}
-            disabled={webcamStatus === 'requesting'}
-            onClick={onToggleCamera}
-          >
-            {webcamLabel}
-          </button>
-          <button
-            type="button"
-            className="chip"
             data-testid="create-camera-link"
             disabled={camera.status === 'opening'}
             onClick={camera.link ? () => setShowQr(true) : camera.createLink}
           >
             {cameramanLabel}
           </button>
+          <label className="chip chip--file" data-testid="media-file-label">
+            📁 Open file
+            <input
+              type="file"
+              accept="video/*"
+              data-testid="media-file-input"
+              className="visually-hidden"
+              onChange={(event) => {
+                const file = event.target.files?.[0]
+                if (file) media.openFile(file)
+                // Allow picking the same file again after stopping it.
+                event.target.value = ''
+              }}
+            />
+          </label>
         </div>
+
+        {cameras.devices.length > 0 && (
+          <div className="row">
+            {cameras.devices.map((device) => {
+              const live = cameras.sources.some((source) => source.id === `cam:${device.id}`)
+              const opening = cameras.busy === device.id
+              return (
+                <button
+                  key={device.id}
+                  type="button"
+                  className={`chip ${live ? 'chip--on' : ''}`}
+                  data-testid={`camera-toggle-${device.id}`}
+                  aria-pressed={live}
+                  aria-busy={opening}
+                  disabled={opening}
+                  title={live ? `Stop ${device.label}` : `Start ${device.label}`}
+                  onClick={() => {
+                    if (live) cameras.stop(device.id)
+                    else void cameras.start(device.id)
+                  }}
+                >
+                  {opening ? 'Opening…' : `${live ? '■' : '＋'} ${device.label}`}
+                </button>
+              )
+            })}
+          </div>
+        )}
+
+        <form
+          className="row"
+          onSubmit={(event) => {
+            event.preventDefault()
+            if (streamUrl.trim()) media.openUrl(streamUrl)
+            setStreamUrl('')
+          }}
+        >
+          <input
+            type="url"
+            className="link-input"
+            placeholder="https://…/stream.m3u8"
+            aria-label="Stream URL"
+            data-testid="media-url"
+            value={streamUrl}
+            onChange={(event) => setStreamUrl(event.target.value)}
+          />
+          <button type="submit" className="chip" data-testid="media-open-url" disabled={media.busy}>
+            {media.busy ? 'Opening…' : 'Open stream'}
+          </button>
+        </form>
+
+        {media.feeds.length > 0 && (
+          <div className="row">
+            {media.feeds.map((feed) => (
+              <span key={feed.id} className="tag">
+                {feed.label}
+                <button
+                  type="button"
+                  aria-label={`Stop ${feed.label}`}
+                  data-testid={`media-stop-${feed.id}`}
+                  onClick={() => media.stop(feed.id)}
+                >
+                  ✕
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+
         {camera.link && (
           <div className="row">
             <button type="button" className="chip" data-testid="camera-stop" onClick={camera.stop}>
@@ -187,13 +271,18 @@ export function Sidebar({
             {screenNotice}
           </p>
         )}
-        {webcamNotice && (
-          <p className="side-note" data-testid="webcam-notice" role="alert">
-            {webcamNotice}
+        {cameras.notice && (
+          <p className="side-note" data-testid="camera-notice" role="alert">
+            {cameras.notice}
+          </p>
+        )}
+        {media.notice && (
+          <p className="side-note" data-testid="media-notice" role="alert">
+            {media.notice}
           </p>
         )}
         {camera.notice && (
-          <p className="side-note" data-testid="camera-notice" role="alert">
+          <p className="side-note" data-testid="camlink-notice" role="alert">
             {camera.notice}
           </p>
         )}
@@ -213,6 +302,33 @@ export function Sidebar({
             ))}
           </div>
         )}
+        <span className="side-hint">[ ] flip feeds</span>
+      </section>
+
+      <section className="side-group">
+        <h2 className="side-title">Program</h2>
+        <label className="field">
+          <span className="field__label">Corner camera</span>
+          <select
+            className="field__select"
+            data-testid="corner-select"
+            value={cornerId ?? ''}
+            onChange={(event) => onCornerChange(event.target.value || null)}
+          >
+            <option value="">None</option>
+            {sources
+              .filter((source) => source.id !== selectedId)
+              .map((source) => (
+                <option key={source.id} value={source.id}>
+                  {source.label}
+                </option>
+              ))}
+          </select>
+        </label>
+        <span className="side-hint">
+          Shown bottom-right on air. Replays keep the live feed in the top-right.
+        </span>
+        {selectedMedia && <MediaTransport element={selectedMedia.element} />}
       </section>
 
       <section className="side-group">
@@ -223,6 +339,7 @@ export function Sidebar({
       <section className="side-group">
         <h2 className="side-title">Replay</h2>
         <ReplayControls {...replay} />
+        <span className="side-hint">R replay · L live</span>
       </section>
 
       <section className="side-group">
@@ -258,13 +375,39 @@ export function Sidebar({
           </button>
         )}
         {!canBroadcast && broadcast.status !== 'live' && (
-          <span className="side-empty">Share a tab or camera first</span>
+          <span className="side-empty">Share a tab or open a video first</span>
         )}
         {broadcast.notice && (
           <p className="side-note" data-testid="broadcast-notice" role="alert">
             {broadcast.notice}
           </p>
         )}
+      </section>
+
+      <section className="side-group">
+        <h2 className="side-title">Hardware</h2>
+        <span className="side-status" data-testid="hardware-gamepads">
+          {hardware.gamepads.length === 0
+            ? 'No gamepad detected'
+            : `Gamepad: ${hardware.gamepads.join(', ')}`}
+        </span>
+        {hardware.midi === 'unsupported' ? (
+          <span className="side-empty">MIDI isn’t available in this browser</span>
+        ) : hardware.midi === 'on' ? (
+          <span className="side-status" data-testid="hardware-midi">
+            MIDI connected
+          </span>
+        ) : (
+          <button
+            type="button"
+            className="chip"
+            data-testid="hardware-midi-enable"
+            onClick={() => void hardware.enableMidi()}
+          >
+            {hardware.midi === 'denied' ? 'MIDI blocked — try again' : 'Enable MIDI'}
+          </button>
+        )}
+        <span className="side-hint">{HARDWARE_HINT}</span>
       </section>
 
       {showQr && camera.link && (

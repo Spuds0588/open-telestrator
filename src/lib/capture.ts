@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { classifyCameraError, type CameraProblem } from './mediaErrors'
+import type { CameraProblem } from './mediaErrors'
 
 /**
  * Lifecycle of a media capture:
@@ -28,10 +28,6 @@ const DISPLAY_CONSTRAINTS: DisplayMediaStreamOptions = {
   video: { displaySurface: 'browser' },
   audio: true,
 }
-
-// Video only: the announcer mic is a separate input (see AudioMixer), so the
-// webcam's own microphone never doubles into the mix.
-const CAMERA_CONSTRAINTS: MediaStreamConstraints = { video: true, audio: false }
 
 function errorName(cause: unknown): string {
   return cause instanceof DOMException ? cause.name : cause instanceof Error ? cause.name : ''
@@ -228,21 +224,5 @@ export function useDisplayCapture(): MediaCapture {
     classify: classifyCaptureError,
     missingTrackNotice: 'The selected source didn’t provide a video track.',
     unsupportedNotice: 'Screen capture isn’t available in this browser.',
-  })
-}
-
-/**
- * Captures the host's own camera (webcam or built-in) as a stage source, so a
- * laptop camera can sit beside a shared tab or a cameraman's phone feed.
- */
-export function useCameraCapture(): MediaCapture {
-  const isSupported = useCallback(() => typeof navigator.mediaDevices?.getUserMedia === 'function', [])
-  const request = useCallback(() => navigator.mediaDevices.getUserMedia(CAMERA_CONSTRAINTS), [])
-  return useMediaCapture({
-    request,
-    isSupported,
-    classify: classifyCameraError,
-    missingTrackNotice: 'The camera didn’t provide a video track.',
-    unsupportedNotice: 'Camera capture isn’t available in this browser.',
   })
 }

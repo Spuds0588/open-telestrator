@@ -26,14 +26,19 @@ export interface AudioController {
 }
 
 /**
- * Binds the audio graph to the capture stream.
+ * Binds the audio graph to the program source.
  *
- * The graph lives and dies with the capture: losing (or stopping) capture tears
- * the whole thing down and releases the mic track. Volume/mute are the only
+ * The graph lives and dies with the source: losing (or stopping) it tears the
+ * whole thing down and releases the mic track. A normal capture arrives as a
+ * stream; an opened video file or stream arrives as a media element instead,
+ * whose audio is routed into the same game channel. Volume/mute are the only
  * React state; metering is read imperatively so a moving meter never re-renders
  * the stage.
  */
-export function useAudioMixer(stream: MediaStream | null): AudioController {
+export function useAudioMixer(
+  stream: MediaStream | null,
+  element?: HTMLMediaElement | null,
+): AudioController {
   const mixerRef = useRef<AudioMixer | null>(null)
   if (mixerRef.current === null) mixerRef.current = new AudioMixer()
   const mixer = mixerRef.current
@@ -50,10 +55,17 @@ export function useAudioMixer(stream: MediaStream | null): AudioController {
     setChannels({ mic: mixer.settingsFor('mic'), game: mixer.settingsFor('game') })
   }, [mixer])
 
-  // Bind the captured game audio to the current program stream. The announcer
-  // mic is a host-owned toggle: it survives switching the program source, so
-  // the host does not lose the mic after a feed change.
+  // Bind the program's audio to the mixer. The announcer mic is a host-owned
+  // toggle: it survives switching the program source, so the host does not lose
+  // the mic after a feed change.
   useEffect(() => {
+    if (element) {
+      setGameAvailable(mixer.attachElement(element))
+      mixer.resume()
+      return () => {
+        mixer.detachGame()
+      }
+    }
     if (!stream) {
       mixer.detachGame()
       setGameAvailable(false)
@@ -64,7 +76,7 @@ export function useAudioMixer(stream: MediaStream | null): AudioController {
     return () => {
       mixer.detachGame()
     }
-  }, [stream, mixer])
+  }, [stream, element, mixer])
 
   // The whole graph (and the mic) is released only when the app goes away.
   useEffect(() => () => mixer.stop(), [mixer])

@@ -1,59 +1,57 @@
 import { describe, expect, it } from 'vitest'
-import { mergeStageSources, type CameraFeed } from './sources'
+import { mergeStageSources, type StageFeed } from './sources'
 
 function fakeStream(id: string): MediaStream {
   return { id } as unknown as MediaStream
 }
 
+function feed(id: string, label: string): StageFeed {
+  return { id, label, stream: fakeStream(`${id}-stream`) }
+}
+
 describe('mergeStageSources', () => {
   it('returns nothing while no input is live', () => {
-    expect(mergeStageSources(null, null, [])).toEqual([])
+    expect(mergeStageSources(null, [], [], [])).toEqual([])
   })
 
   it('lists the shared screen first with a stable id', () => {
     const screen = fakeStream('screen-stream')
-    const sources = mergeStageSources(screen, null, [])
-    expect(sources).toEqual([
+    expect(mergeStageSources(screen, [], [], [])).toEqual([
       { id: 'screen', label: 'Shared screen', kind: 'screen', stream: screen },
     ])
   })
 
-  it('adds the host webcam as a camera source', () => {
-    const webcam = fakeStream('webcam-stream')
-    expect(mergeStageSources(null, webcam, [])).toEqual([
-      { id: 'webcam', label: 'Webcam', kind: 'camera', stream: webcam },
-    ])
+  it('keeps every host camera, in the order they were added', () => {
+    const sources = mergeStageSources(null, [feed('cam:a', 'Camera A'), feed('cam:b', 'Camera B')], [], [])
+    expect(sources.map((source) => source.id)).toEqual(['cam:a', 'cam:b'])
+    expect(sources.every((source) => source.kind === 'camera')).toBe(true)
   })
 
-  it('appends cameraman feeds after the screen and webcam', () => {
+  it('appends opened media, then cameraman feeds, after the host inputs', () => {
     const screen = fakeStream('s')
-    const webcam = fakeStream('w')
-    const feeds: CameraFeed[] = [
-      { id: 'peer-1', label: 'Camera 1111', stream: fakeStream('c1') },
-      { id: 'peer-2', label: 'Camera 2222', stream: fakeStream('c2') },
-    ]
+    const host = [feed('cam:a', 'Camera A')]
+    const media = [feed('media:1', 'match.mp4')]
+    const cameramen = [feed('camera:peer-1', 'Camera 1111')]
 
-    const sources = mergeStageSources(screen, webcam, feeds)
+    const sources = mergeStageSources(screen, host, media, cameramen)
 
     expect(sources.map((source) => source.id)).toEqual([
       'screen',
-      'webcam',
+      'cam:a',
+      'media:1',
       'camera:peer-1',
-      'camera:peer-2',
     ])
-    expect(sources.map((source) => source.kind)).toEqual([
-      'screen',
-      'camera',
-      'camera',
-      'camera',
-    ])
+    expect(sources.map((source) => source.kind)).toEqual(['screen', 'camera', 'media', 'camera'])
     expect(sources.every((source) => source.stream !== null)).toBe(true)
   })
 
   it('never reuses an id, even if a cameraman id looks like a built-in one', () => {
-    const sources = mergeStageSources(fakeStream('s'), fakeStream('w'), [
-      { id: 'webcam', label: 'Impostor', stream: fakeStream('c') },
-    ])
+    const sources = mergeStageSources(
+      fakeStream('s'),
+      [feed('cam:webcam', 'Host camera')],
+      [feed('media:webcam', 'Impostor file')],
+      [feed('camera:cam:webcam', 'Impostor camera')],
+    )
     expect(new Set(sources.map((source) => source.id)).size).toBe(sources.length)
   })
 })
