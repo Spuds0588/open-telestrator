@@ -83,6 +83,30 @@ itself rather than freezing:
 Broadcasting is one-way to viewers: they never send video or audio back to the
 host or to each other.
 
+## What a viewer sees
+
+The viewer page is a player, not a debug view: the picture fills the screen and
+the chrome fades out while it plays, coming back on any movement. The bar carries
+the controls people already know — play/pause, mute, a volume slider, full screen,
+picture-in-picture, and cast where the browser offers it — with a live indicator
+that turns amber the moment the picture is no longer live. Clicking the picture
+toggles playback, and Space/K, M, F and the arrow keys do what they do everywhere
+else. Status is a small chip in the corner rather than a bar under the video.
+
+**Pausing keeps what you missed.** While paused, the viewer records what arrives
+and counts it up next to the live indicator; resuming plays that recording back
+before returning to the live edge when it runs out. The buffer stops growing at
+two minutes so a tab left paused overnight cannot eat the machine, and browsers
+that cannot record simply rejoin live on resume instead. Audio is buffered along
+with the picture.
+
+**On casting.** The cast button appears when the browser implements the Remote
+Playback API and hands the element to it, which is the only in-page route to a
+TV; AirPlay is enabled for Safari via `x-webkit-airplay`. Casting a *live* WebRTC
+stream is limited by the receiver, not by this app: the common fallback that
+always works is your browser's own "cast tab" or screen mirroring. Full screen and
+picture-in-picture are the browser's own APIs and depend on it permitting them.
+
 ## Development
 
 ```bash

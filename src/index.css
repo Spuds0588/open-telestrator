@@ -682,54 +682,226 @@ body {
   text-align: center;
 }
 
-/* ── Viewer page ─────────────────────────────────────────── */
-.viewer {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-}
-
-.viewer__stage {
-  flex: 1;
+/* ── Viewer player ───────────────────────────────────────────
+   Full-bleed video with the familiar chrome laid over it: the controls
+   fade out while the picture plays and come back on any interaction. */
+.player {
   position: relative;
+  height: 100%;
   background: #000;
-  min-height: 0;
+  overflow: hidden;
 }
 
-.viewer__video {
+.player__stage {
   position: absolute;
   inset: 0;
+}
+
+.player__video {
+  display: block;
   width: 100%;
   height: 100%;
   object-fit: contain;
   background: #000;
+  cursor: pointer;
 }
 
-.viewer__bar {
+.player__chips {
+  position: absolute;
+  top: 12px;
+  left: 12px;
   display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 10px;
-  padding: 10px 14px;
-  border-top: 1px solid var(--line);
-  background: var(--panel);
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  max-width: min(60ch, 72%);
+  pointer-events: none;
 }
 
-.viewer__status {
-  flex: 1;
-  color: var(--muted);
-  font-size: 13px;
+.player__chip {
+  font-size: 12px;
+  color: var(--text);
+  background: rgba(11, 15, 20, 0.72);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 4px 10px;
+  backdrop-filter: blur(6px);
 }
 
-.viewer__status[data-state='live'] {
+.player__chip[data-state='live'] {
   color: var(--ok);
 }
 
-.viewer__notice {
-  margin: 0;
-  padding: 8px 14px;
+.player__chip--warn {
   color: var(--warn);
-  font-size: 13px;
+}
+
+.player__chip--cast {
+  color: var(--accent);
+}
+
+.player__center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.player__center .btn {
+  pointer-events: auto;
+}
+
+.player__spinner {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 3px solid rgba(255, 255, 255, 0.22);
+  border-top-color: #fff;
+  animation: player-spin 0.9s linear infinite;
+}
+
+@keyframes player-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.player__chrome {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  pointer-events: none;
+}
+
+/* While the chrome is faded out its buttons must not still catch clicks: a tap
+   on the picture should reach the picture. */
+.player--awake .player__chrome {
+  opacity: 1;
+}
+
+.player--awake .player__big,
+.player--awake .player__bar {
+  pointer-events: auto;
+}
+
+.player__big {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 76px;
+  height: 76px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 50%;
+  background: rgba(11, 15, 20, 0.62);
+  color: #fff;
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+  backdrop-filter: blur(6px);
+}
+
+.player__big:hover {
+  background: rgba(11, 15, 20, 0.82);
+}
+
+.player__bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px calc(10px + env(safe-area-inset-bottom));
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.78), rgba(0, 0, 0, 0));
+}
+
+.player__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 34px;
+  height: 34px;
+  padding: 0 6px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: #fff;
+  font: inherit;
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.player__btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.player__btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.player__volume {
+  width: 92px;
+  accent-color: #fff;
+  cursor: pointer;
+}
+
+.player__live {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.45);
+  color: #fff;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.player__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--muted);
+}
+
+.player__live[data-state='live'] .player__dot {
+  background: var(--accent);
+  animation: player-pulse 2s infinite;
+}
+
+.player__live[data-state='paused'],
+.player__live[data-state='backlog'] {
+  color: var(--warn);
+}
+
+.player__live[data-state='paused'] .player__dot,
+.player__live[data-state='backlog'] .player__dot {
+  background: var(--warn);
+}
+
+.player__spacer {
+  flex: 1;
+}
+
+@keyframes player-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.55);
+  }
+  70% {
+    box-shadow: 0 0 0 8px rgba(239, 68, 68, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
+  }
 }
 
 /* ── Desktop only: phones and tablets get a notice ───────── */
