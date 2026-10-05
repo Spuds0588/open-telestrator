@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import {
+  ALL_TOOLS,
+  COLOR_LABELS,
+  COLORS,
+  TOOL_LABELS,
   clamp01,
   drawStroke,
   renderStrokes,
-  toolGlyph,
   type Point,
   type Stroke,
   type Tool,
@@ -53,11 +56,19 @@ describe('clamp01', () => {
   })
 })
 
-describe('toolGlyph', () => {
-  it('returns a distinct glyph for every tool', () => {
-    const glyphs = (['pen', 'highlight', 'rect', 'ellipse'] as Tool[]).map(toolGlyph)
-    expect(glyphs.every((glyph) => glyph.length > 0)).toBe(true)
-    expect(new Set(glyphs).size).toBe(4)
+describe('TOOL_LABELS', () => {
+  it('names every tool, and names each of them differently', () => {
+    const labels = ALL_TOOLS.map((tool) => TOOL_LABELS[tool])
+    expect(labels.every((label) => label.length > 0)).toBe(true)
+    expect(new Set(labels).size).toBe(ALL_TOOLS.length)
+  })
+})
+
+describe('COLOR_LABELS', () => {
+  it('names every palette colour, each of them differently', () => {
+    const labels = COLORS.map((colour) => COLOR_LABELS[colour])
+    expect(labels.every((label) => label.length > 0)).toBe(true)
+    expect(new Set(labels).size).toBe(COLORS.length)
   })
 })
 

@@ -101,8 +101,21 @@ runs the tests before building, so a failing test blocks the deploy to prod.
   code and unused imports fail the build. Keep it that way rather than
   suppressing.
 - **No UI framework and no CSS modules.** Everything is in `src/index.css` with
-  semantic class names (`.side-group`, `.feed-card`, `.viewer__bar`). Delete
+  semantic class names (`.panel`, `.rail`, `.feed-card`). Delete
   rules you orphan instead of leaving them.
+- **The controls are a rail plus one panel.** `src/lib/panels.ts` owns the roster
+  and the badge each closed panel shows; `src/components/Sidebar.tsx` renders the
+  rail and whichever panel is open. There is no panel per app concern: the corner
+  camera (the picture-in-picture) belongs to the **Input** panel with the other
+  source controls. Rail tiles and the co-host's drawing tools are sized for a
+  stylus and a fingertip — keep new controls at least 40px on their short side
+  rather than shrinking them to fit.
+- **Icons are Lucide outlines, never emoji**, mapped per concern in
+  `src/components/icons.tsx` and stroked in `currentColor` so the control's own
+  colour drives them. Importing a named icon is the only way to reach one: the
+  barrel is tree-shaken, so the rest of the set never reaches the bundle.
+  Sizing lives in `index.css` (`.chip svg`, `.icon-btn svg`, `.rail__icon`), so a
+  new control inherits it instead of setting its own width.
 - **The web app is desktop-only.** Phones and tablets get the unsupported notice
   pointing at GitHub releases. The cameraman (`?camera=`) and viewer (`?watch=`)
   entries live on the studio page (`app.html`) and are code-split in

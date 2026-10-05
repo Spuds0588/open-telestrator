@@ -1,18 +1,20 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
+import { Eye, Maximize, Minimize, Pencil } from 'lucide-react'
 import Peer, { type DataConnection, type MediaConnection } from 'peerjs'
 import { parseCameraLink, parseCameraReport, type CameraSession } from '../lib/cameraLink'
 import { applyCollabOp, drawOp, parseCollabOp, type CollabOp } from '../lib/collab'
 import { classifyCameraError } from '../lib/mediaErrors'
 import { peerOptions } from '../lib/peerConfig'
 import { TelestrationOverlay } from '../components/TelestrationOverlay'
+import { TOOL_ICONS } from '../components/icons'
 import {
   ALL_TOOLS,
   COLORS,
   DEFAULT_COLOR,
   DEFAULT_TOOL,
   DEFAULT_WIDTH,
-  toolGlyph,
+  TOOL_LABELS,
   type Stroke,
   type Tool,
 } from '../lib/telestration'
@@ -351,7 +353,7 @@ export default function CameramanApp() {
         </div>
         {viewers !== null && (
           <span className="camera__viewers" data-testid="camera-viewers">
-            <span aria-hidden="true">👁</span>{' '}
+            <Eye aria-hidden="true" />
             {viewers === 1 ? '1 viewer' : `${viewers} viewers`}
           </span>
         )}
@@ -362,19 +364,22 @@ export default function CameramanApp() {
           /* The shared canvas: the program picture with the co-host's strokes. */
           <div className="camera__draw" data-testid="camera-draw">
             <div className="camera__draw-tools">
-              {ALL_TOOLS.map((entry) => (
-                <button
-                  key={entry}
-                  type="button"
-                  className={'btn btn--ghost' + (entry === tool ? ' is-active' : '')}
-                  data-testid={`camera-tool-${entry}`}
-                  aria-label={entry}
-                  aria-pressed={entry === tool}
-                  onClick={() => setTool(entry)}
-                >
-                  {toolGlyph(entry)}
-                </button>
-              ))}
+              {ALL_TOOLS.map((entry) => {
+                const ToolIcon = TOOL_ICONS[entry]
+                return (
+                  <button
+                    key={entry}
+                    type="button"
+                    className={'btn btn--ghost' + (entry === tool ? ' is-active' : '')}
+                    data-testid={`camera-tool-${entry}`}
+                    aria-label={TOOL_LABELS[entry]}
+                    aria-pressed={entry === tool}
+                    onClick={() => setTool(entry)}
+                  >
+                    <ToolIcon aria-hidden="true" />
+                  </button>
+                )
+              })}
               <span className="camera__swatches">
                 {COLORS.map((swatch) => (
                   <button
@@ -498,7 +503,8 @@ export default function CameramanApp() {
                   onClick={fullscreen ? exitFullscreen : enterFullscreen}
                   aria-label={fullscreen ? 'Exit full screen' : 'Enter full screen'}
                 >
-                  {fullscreen ? '⛶ Exit' : '⛶ Full'}
+                  {fullscreen ? <Minimize aria-hidden="true" /> : <Maximize aria-hidden="true" />}
+                  {fullscreen ? 'Exit' : 'Full'}
                 </button>
               </div>
             )}
@@ -511,7 +517,8 @@ export default function CameramanApp() {
                 data-testid="camera-draw-open"
                 onClick={() => setDrawing(true)}
               >
-                ✎ Draw on the program
+                <Pencil aria-hidden="true" />
+                Draw on the program
               </button>
             )}
 

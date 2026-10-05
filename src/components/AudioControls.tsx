@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react'
+import { Gamepad2, Mic, Volume2, VolumeX } from 'lucide-react'
 import type { AudioSource } from '../lib/audio'
 import type { AudioController } from '../lib/useAudioMixer'
 
@@ -44,7 +45,10 @@ export function AudioControls({
     <div className="audio" data-testid="audio-controls" data-mic={micStatus}>
       <div className="audio__row">
         <div className="audio__head">
-          <span className="audio__label">🎙 Mic</span>
+          <span className="audio__label">
+            <Mic aria-hidden="true" />
+            Mic
+          </span>
           {micStatus === 'on' ? (
             <>
               <button
@@ -55,7 +59,7 @@ export function AudioControls({
                 title={channels.mic.muted ? 'Unmute mic' : 'Mute mic'}
                 onClick={() => toggleMute('mic')}
               >
-                {channels.mic.muted ? '🔇' : '🔊'}
+                {channels.mic.muted ? <VolumeX aria-hidden="true" /> : <Volume2 aria-hidden="true" />}
               </button>
               <button type="button" className="chip" data-testid="mic-disable" onClick={disableMic}>
                 Off
@@ -103,7 +107,10 @@ export function AudioControls({
 
       <div className="audio__row">
         <div className="audio__head">
-          <span className="audio__label">🎮 Game</span>
+          <span className="audio__label">
+            <Gamepad2 aria-hidden="true" />
+            Game
+          </span>
           {gameAvailable ? (
             <button
               type="button"
@@ -113,7 +120,7 @@ export function AudioControls({
               title={channels.game.muted ? 'Unmute game audio' : 'Mute game audio'}
               onClick={() => toggleMute('game')}
             >
-              {channels.game.muted ? '🔇' : '🔊'}
+              {channels.game.muted ? <VolumeX aria-hidden="true" /> : <Volume2 aria-hidden="true" />}
             </button>
           ) : (
             <span className="audio__notice" data-testid="game-none">

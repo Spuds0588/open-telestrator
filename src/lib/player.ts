@@ -21,10 +21,12 @@ export function stepVolume(current: number, delta: number): number {
   return clampVolume(clampVolume(current) + delta)
 }
 
-/** The speaker glyph for a volume/mute combination. */
-export function volumeGlyph(volume: number, muted: boolean): string {
-  if (muted || clampVolume(volume) === 0) return '🔇'
-  return clampVolume(volume) < 0.5 ? '🔉' : '🔊'
+/** How loud the viewer's output is, for the one speaker icon it shows. */
+export type VolumeLevel = 'muted' | 'low' | 'high'
+
+export function volumeLevel(volume: number, muted: boolean): VolumeLevel {
+  if (muted || clampVolume(volume) === 0) return 'muted'
+  return clampVolume(volume) < 0.5 ? 'low' : 'high'
 }
 
 /** What the cast button should say about itself. */

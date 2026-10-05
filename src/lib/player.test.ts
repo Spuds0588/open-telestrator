@@ -10,7 +10,7 @@ import {
   pickPipMode,
   pickRecorderMime,
   stepVolume,
-  volumeGlyph,
+  volumeLevel,
 } from './player'
 
 describe('volume', () => {
@@ -28,12 +28,12 @@ describe('volume', () => {
     expect(stepVolume(0.5, 0)).toBeCloseTo(0.5)
   })
 
-  it('picks a glyph that matches the state', () => {
-    expect(volumeGlyph(1, false)).toBe('🔊')
-    expect(volumeGlyph(0.8, false)).toBe('🔊')
-    expect(volumeGlyph(0.2, false)).toBe('🔉')
-    expect(volumeGlyph(1, true)).toBe('🔇')
-    expect(volumeGlyph(0, false)).toBe('🔇')
+  it('picks the speaker icon the state calls for', () => {
+    expect(volumeLevel(1, false)).toBe('high')
+    expect(volumeLevel(0.8, false)).toBe('high')
+    expect(volumeLevel(0.2, false)).toBe('low')
+    expect(volumeLevel(1, true)).toBe('muted')
+    expect(volumeLevel(0, false)).toBe('muted')
   })
 })
 

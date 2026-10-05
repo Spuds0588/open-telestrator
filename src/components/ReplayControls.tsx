@@ -1,3 +1,4 @@
+import { Pause, Play, Rewind, Square } from 'lucide-react'
 import type { ReplayController } from '../lib/useReplay'
 
 /** Instant-replay affordances in the sidebar. */
@@ -28,7 +29,8 @@ export function ReplayControls({
               data-testid="replay-toggle"
               onClick={togglePlay}
             >
-              {paused ? '▶ Play' : '⏸ Pause'}
+              {paused ? <Play aria-hidden="true" /> : <Pause aria-hidden="true" />}
+              {paused ? 'Play' : 'Pause'}
             </button>
           </div>
           <button
@@ -37,7 +39,8 @@ export function ReplayControls({
             data-testid="replay-live"
             onClick={returnToLive}
           >
-            ⏹ Return to live
+            <Square aria-hidden="true" />
+            Return to live
           </button>
         </>
       ) : (
@@ -50,7 +53,8 @@ export function ReplayControls({
             onClick={startReplay}
             title="Play the last several seconds at 0.5× speed"
           >
-            ⏪ Instant replay
+            <Rewind aria-hidden="true" />
+            Instant replay
           </button>
           <span className="replay__note" data-testid="replay-note">
             {available ? `${windowSeconds}s buffered` : 'buffering…'}

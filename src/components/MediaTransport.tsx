@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Pause, Play, SkipBack } from 'lucide-react'
 import { formatClock } from '../lib/mediaFeeds'
 
 /**
@@ -63,7 +64,8 @@ export function MediaTransport({ element }: { element: HTMLVideoElement }) {
     >
       <div className="row">
         <button type="button" className="chip" data-testid="media-play" onClick={toggle}>
-          {playing ? '⏸ Pause' : ended ? '▶ Replay' : '▶ Play'}
+          {playing ? <Pause aria-hidden="true" /> : <Play aria-hidden="true" />}
+          {playing ? 'Pause' : ended ? 'Replay' : 'Play'}
         </button>
         <button
           type="button"
@@ -74,7 +76,8 @@ export function MediaTransport({ element }: { element: HTMLVideoElement }) {
             void element.play().catch(() => undefined)
           }}
         >
-          ⏮ Restart
+          <SkipBack aria-hidden="true" />
+          Restart
         </button>
         <span className="transport__time">
           {formatClock(time)}

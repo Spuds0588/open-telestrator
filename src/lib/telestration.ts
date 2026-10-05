@@ -32,15 +32,19 @@ export interface Point {
 
 export const clamp01 = (value: number): number => Math.min(1, Math.max(0, value))
 
-const TOOL_GLYPH: Record<Tool, string> = {
-  pen: '✎',
-  highlight: '⎘',
-  rect: '▭',
-  ellipse: '◯',
-}
-
 /** All tools the host can draw with. */
 export const ALL_TOOLS = ['pen', 'highlight', 'rect', 'ellipse'] as const
+
+/**
+ * What each tool is called on screen. The ids are the wire names; these are the
+ * words a commentator uses — a box around a player, a circle over a runner.
+ */
+export const TOOL_LABELS: Record<Tool, string> = {
+  pen: 'Pen',
+  highlight: 'Highlight',
+  rect: 'Box',
+  ellipse: 'Circle',
+}
 
 /** The default tool for a fresh canvas. */
 export const DEFAULT_TOOL: Tool = 'pen'
@@ -59,8 +63,14 @@ export const DEFAULT_WIDTH = 6
 /** The colour palette offered in the sidebar. */
 export const COLORS = ['#ef4444', '#f59e0b', '#22c55e', '#3b82f6', '#a855f7', '#ffffff'] as const
 
-export function toolGlyph(tool: Tool): string {
-  return TOOL_GLYPH[tool]
+/** What each palette colour is called on screen, so a row can say "Red". */
+export const COLOR_LABELS: Record<(typeof COLORS)[number], string> = {
+  '#ef4444': 'Red',
+  '#f59e0b': 'Amber',
+  '#22c55e': 'Green',
+  '#3b82f6': 'Blue',
+  '#a855f7': 'Purple',
+  '#ffffff': 'White',
 }
 
 /** Draws a single gesture onto a 2D context whose transform maps 1 unit to 1

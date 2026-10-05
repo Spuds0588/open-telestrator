@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Camera, FileVideo, Link2, MonitorUp } from 'lucide-react'
 import type { CaptureStatus } from '../lib/capture'
 import type { HostCameras } from '../lib/useHostCameras'
 import type { MediaFeeds } from '../lib/useMediaFeeds'
@@ -64,7 +65,7 @@ export function AddInputModal({
             }}
           >
             <span className="picker__icon" aria-hidden="true">
-              🖥
+              <MonitorUp />
             </span>
             <span className="picker__text">
               <strong>{sharing ? 'Stop sharing' : requesting ? 'Waiting…' : 'Share a tab or screen'}</strong>
@@ -98,7 +99,7 @@ export function AddInputModal({
                   }}
                 >
                   <span className="picker__icon" aria-hidden="true">
-                    🎥
+                    <Camera />
                   </span>
                   <span className="picker__text">
                     <strong>{opening ? 'Opening…' : device.label}</strong>
@@ -111,7 +112,7 @@ export function AddInputModal({
 
           <label className="picker__row" data-testid="add-input-file">
             <span className="picker__icon" aria-hidden="true">
-              📁
+              <FileVideo />
             </span>
             <span className="picker__text">
               <strong>Open a video file</strong>
@@ -144,7 +145,7 @@ export function AddInputModal({
             }}
           >
             <span className="picker__icon" aria-hidden="true">
-              🔗
+              <Link2 />
             </span>
             <span className="picker__text">
               <strong>Open a stream URL</strong>

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { PictureInPicture2, Plus, QrCode, Trash2, Undo2, X } from 'lucide-react'
 import type { CaptureStatus } from '../lib/capture'
 import { useHostCamera } from '../lib/useHostCamera'
 import type { HostCameras } from '../lib/useHostCameras'
@@ -10,7 +11,17 @@ import type { AudioController } from '../lib/useAudioMixer'
 import type { ReplayController } from '../lib/useReplay'
 import type { BroadcastController } from '../lib/useBroadcast'
 import { useQrCode } from '../lib/useQrCode'
-import { ALL_TOOLS, COLORS, toolGlyph, type Tool } from '../lib/telestration'
+import { ALL_TOOLS, COLORS, COLOR_LABELS, TOOL_LABELS, type Tool } from '../lib/telestration'
+import {
+  DEFAULT_PANEL,
+  PANELS,
+  panelBadge,
+  type PanelBadge,
+  type PanelId,
+  type PanelSpec,
+  type PanelStatus,
+} from '../lib/panels'
+import { PANEL_ICONS, RAIL_STROKE, TOOL_ICONS } from './icons'
 import { AudioControls } from './AudioControls'
 import { MediaTransport } from './MediaTransport'
 import { ReplayControls } from './ReplayControls'
@@ -18,11 +29,17 @@ import { QrModal } from './QrModal'
 import { AddInputModal } from './AddInputModal'
 
 /**
- * The single control sidebar, on the right of the stage: drawing tools, the
- * input stack (a shared tab, the host's cameras, opened videos and every live
- * feed), the program's corner camera, the audio mixer, replay, the **Co-hosts**
- * group (invite, who is connected, drop one), broadcast and the hardware
- * triggers.
+ * The controls, on the right of the stage: a rail of every group and one panel
+ * in front of it.
+ *
+ * The rail is always visible and carries each group's live state — how many
+ * inputs are on the stage, who has joined the link, whether the program is on
+ * air — so a closed panel is never a grey mystery. Its tiles are sized for a
+ * stylus and a fingertip, and spread over the full height rather than clustering
+ * at the top. Only one panel is open at a time, and it can be hidden entirely
+ * for a clean picture while broadcasting. The program and the Go live / viewer
+ * count sit pinned at the top of whichever panel is open, so the live actions
+ * are never buried in a scroll.
  */
 export function Sidebar({
   tool,
@@ -76,17 +93,35 @@ export function Sidebar({
   canBroadcast: boolean
 }) {
   // The QR dialog opens as soon as a cameraman link is minted, and can be
-  // reopened from the input buttons later.
+  // reopened from the panel later.
   const [showQr, setShowQr] = useState(false)
   const [showWatchQr, setShowWatchQr] = useState(false)
   const [showAdd, setShowAdd] = useState(false)
+  // Which group's panel is open. Clicking the open group's rail tile closes it,
+  // leaving the rail — the distraction-free picture while on air.
+  const [panel, setPanel] = useState<PanelId | null>(DEFAULT_PANEL)
   const viewerQr = useQrCode(broadcast.link)
   useEffect(() => {
     if (camera.link) setShowQr(true)
   }, [camera.link])
 
+  // A co-host arriving opens the Co-hosts panel: someone has just joined the
+  // link, and the host should see who without hunting for the rail tile. Only
+  // ever on an arrival, never on mount or on a disconnection.
+  const cohostCount = camera.cohosts.length
+  const seenCohosts = useRef(cohostCount)
+  useEffect(() => {
+    if (cohostCount > seenCohosts.current) setPanel('cohosts')
+    seenCohosts.current = cohostCount
+  }, [cohostCount])
+
   // The transport only makes sense for an opened file or stream.
   const selectedMedia = media.feeds.find((feed) => feed.id === selectedId) ?? null
+
+  // What is on the program right now: the pinned strip at the top of the panel.
+  const onAir = sources.find((source) => source.id === selectedId) ?? null
+  const live = broadcast.status === 'live'
+  const opening = broadcast.status === 'opening'
 
   /** Stop one input from the list: the screen, one of the host's cameras, or a
    * opened file/stream. A co-host's camera is not removable here. */
@@ -98,271 +133,407 @@ export function Sidebar({
     else media.stop(removal.id)
   }
 
+  const status: PanelStatus = {
+    inputs: sources.length,
+    mic: audio.micStatus,
+    replaying: replay.replaying,
+    cohosts: cohostCount,
+    broadcasting: broadcast.status,
+    viewers: broadcast.viewers,
+    gamepads: hardware.gamepads.length,
+  }
+
+  const active = PANELS.find((item) => item.id === panel) ?? null
+
   const inviteLabel = camera.link
-    ? '🎨 Show invite QR'
+    ? 'Show invite QR'
     : camera.status === 'opening'
       ? 'Connecting…'
-      : '🎨 Invite a co-host'
+      : 'Invite a co-host'
+
+  const togglePanel = (id: PanelId) => setPanel((current) => (current === id ? null : id))
+  const mainPanels = PANELS.filter((item) => !item.utility)
+  const utilityPanels = PANELS.filter((item) => item.utility)
 
   return (
     <aside className="sidebar" data-testid="sidebar" aria-label="Controls">
-      <section className="side-group">
-        <h2 className="side-title">Draw</h2>
-        <div className="row">
-          {ALL_TOOLS.map((item, index) => (
-            <button
-              key={item}
-              type="button"
-              aria-label={`Select ${item} tool`}
-              aria-pressed={tool === item}
-              data-testid={`sidebar-tool-${item}`}
-              className={`icon-btn ${tool === item ? 'icon-btn--on' : ''}`}
-              onClick={() => setTool(item)}
-            >
-              {toolGlyph(item)}
-              <span className="key-badge">{index + 1}</span>
-            </button>
-          ))}
-        </div>
-        <div className="row row--badged">
-          {COLORS.map((swatch) => (
-            <button
-              key={swatch}
-              type="button"
-              aria-label={`Select colour ${swatch}`}
-              aria-pressed={color === swatch}
-              data-testid={`sidebar-colour-${swatch}`}
-              className={`swatch ${color === swatch ? 'swatch--on' : ''}`}
-              style={{ background: swatch }}
-              onClick={() => setColor(swatch)}
+      {active && (
+        <section className="panel" id="workbench-panel" data-testid="panel" aria-label={active.label}>
+          {/* Pinned above the panel's own controls in every group: what is on
+              the program, and the one live action that belongs to no group. */}
+          <div className="panel__top">
+            <span
+              className={`panel__dot ${live ? 'panel__dot--live' : ''}`}
+              aria-hidden="true"
             />
-          ))}
-          <span className="key-badge key-badge--row">C X</span>
-        </div>
-        <div className="row">
-          <button
-            type="button"
-            className="icon-btn"
-            data-testid="sidebar-undo"
-            onClick={onUndo}
-            disabled={!canUndo}
-            title="Undo last stroke"
-          >
-            ↺<span className="key-badge">Z</span>
-          </button>
-          <button
-            type="button"
-            className="icon-btn"
-            data-testid="sidebar-clear"
-            onClick={onClear}
-            disabled={!canUndo}
-            title="Clear all strokes"
-          >
-            🗑<span className="key-badge">Del</span>
-          </button>
-        </div>
-      </section>
-
-      <section className="side-group">
-        <h2 className="side-title">Input</h2>
-        <button
-          type="button"
-          className="chip chip--wide"
-          data-testid="add-input"
-          onClick={() => setShowAdd(true)}
-        >
-          ＋ Add input
-        </button>
-
-        {screenNotice && (
-          <p className="side-note" data-testid="screen-notice" role="alert">
-            {screenNotice}
-          </p>
-        )}
-        {cameras.notice && (
-          <p className="side-note" data-testid="camera-notice" role="alert">
-            {cameras.notice}
-          </p>
-        )}
-        {media.notice && (
-          <p className="side-note" data-testid="media-notice" role="alert">
-            {media.notice}
-          </p>
-        )}
-        {sources.length === 0 ? (
-          <span className="side-empty" data-testid="feeds-empty">
-            No inputs yet
-          </span>
-        ) : (
-          <div className="feed-list">
-            {sources.map((source) => (
-              <FeedCard
-                key={source.id}
-                source={source}
-                selected={selectedId === source.id}
-                onSelect={onSelect}
-                onRemove={removeInput}
-              />
-            ))}
-          </div>
-        )}
-        <span className="side-hint">[ ] flip feeds</span>
-      </section>
-
-      <section className="side-group">
-        <h2 className="side-title">Program</h2>
-        <label className="field">
-          <span className="field__label">Corner camera</span>
-          <select
-            className="field__select"
-            data-testid="corner-select"
-            value={cornerId ?? ''}
-            onChange={(event) => onCornerChange(event.target.value || null)}
-          >
-            <option value="">None</option>
-            {sources
-              .filter((source) => source.id !== selectedId)
-              .map((source) => (
-                <option key={source.id} value={source.id}>
-                  {source.label}
-                </option>
-              ))}
-          </select>
-        </label>
-        <span className="side-hint">
-          Shown bottom-right on air. Replays keep the live feed in the top-right.
-        </span>
-        {selectedMedia && <MediaTransport element={selectedMedia.element} />}
-      </section>
-
-      <section className="side-group">
-        <h2 className="side-title">Audio</h2>
-        <AudioControls {...audio} />
-      </section>
-
-      <section className="side-group">
-        <h2 className="side-title">Replay</h2>
-        <ReplayControls {...replay} />
-        <span className="side-hint">R replay · L live</span>
-      </section>
-
-      <section className="side-group">
-        <h2 className="side-title">Co-hosts</h2>
-        <button
-          type="button"
-          className="chip chip--wide"
-          data-testid="create-camera-link"
-          disabled={camera.status === 'opening'}
-          onClick={camera.link ? () => setShowQr(true) : camera.createLink}
-        >
-          {inviteLabel}
-        </button>
-        {camera.cohosts.length === 0 ? (
-          <span className="side-empty" data-testid="cohosts-empty">
-            No co-hosts connected
-          </span>
-        ) : (
-          <ul className="cohost-list" data-testid="cohost-list">
-            {camera.cohosts.map((cohost) => (
-              <li key={cohost.id} className="cohost" data-testid={`cohost-${cohost.id}`}>
-                <span className="cohost__name">{cohost.label}</span>
-                {cohost.streaming && <span className="cohost__tag">camera</span>}
-                <button
-                  type="button"
-                  className="cohost__drop"
-                  aria-label={`Disconnect ${cohost.label}`}
-                  data-testid={`cohost-disconnect-${cohost.id}`}
-                  onClick={() => camera.disconnect(cohost.id)}
-                >
-                  ✕
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-        <span className="side-hint">
-          Invited co-hosts draw on the program from their phone; their strokes go on air with
-          yours.
-        </span>
-        {camera.link && (
-          <button type="button" className="chip" data-testid="camera-stop" onClick={camera.stop}>
-            End co-host session
-          </button>
-        )}
-        {camera.notice && (
-          <p className="side-note" data-testid="camlink-notice" role="alert">
-            {camera.notice}
-          </p>
-        )}
-      </section>
-
-      <section className="side-group">
-        <h2 className="side-title">Broadcast</h2>
-        {broadcast.status === 'live' ? (
-          <>
-            <span className="side-status" data-testid="broadcast-viewers">
-              {broadcast.viewers === 1 ? '1 viewer' : `${broadcast.viewers} viewers`}
-            </span>
-            <div className="row">
+            <button
+              type="button"
+              className="panel__onair"
+              data-testid="onair-program"
+              title="Show the input panel"
+              onClick={() => setPanel('input')}
+            >
+              {onAir ? onAir.label : 'Nothing on air'}
+            </button>
+            {live ? (
+              <span className="panel__count" data-testid="broadcast-viewers">
+                {broadcast.viewers === 1 ? '1 viewer' : `${broadcast.viewers} viewers`}
+              </span>
+            ) : (
               <button
                 type="button"
-                className="chip"
-                data-testid="broadcast-qr"
-                onClick={() => setShowWatchQr(true)}
+                className="chip chip--live"
+                data-testid="broadcast-start"
+                disabled={!canBroadcast || opening}
+                onClick={broadcast.start}
               >
-                Show QR
+                {opening ? 'Connecting…' : 'Go live'}
               </button>
-              <button type="button" className="chip" data-testid="broadcast-stop" onClick={broadcast.stop}>
-                Stop
-              </button>
-            </div>
-          </>
-        ) : (
-          <button
-            type="button"
-            className="chip chip--wide"
-            data-testid="broadcast-start"
-            disabled={!canBroadcast || broadcast.status === 'opening'}
-            onClick={broadcast.start}
-          >
-            {broadcast.status === 'opening' ? 'Connecting…' : 'Go live to viewers'}
-          </button>
-        )}
-        {!canBroadcast && broadcast.status !== 'live' && (
-          <span className="side-empty">Share a tab or open a video first</span>
-        )}
-        {broadcast.notice && (
-          <p className="side-note" data-testid="broadcast-notice" role="alert">
-            {broadcast.notice}
-          </p>
-        )}
-      </section>
+            )}
+          </div>
 
-      <section className="side-group">
-        <h2 className="side-title">Hardware</h2>
-        <span className="side-status" data-testid="hardware-gamepads">
-          {hardware.gamepads.length === 0
-            ? 'No gamepad detected'
-            : `Gamepad: ${hardware.gamepads.join(', ')}`}
-        </span>
-        {hardware.midi === 'unsupported' ? (
-          <span className="side-empty">MIDI isn’t available in this browser</span>
-        ) : hardware.midi === 'on' ? (
-          <span className="side-status" data-testid="hardware-midi">
-            MIDI connected
-          </span>
-        ) : (
-          <button
-            type="button"
-            className="chip"
-            data-testid="hardware-midi-enable"
-            onClick={() => void hardware.enableMidi()}
-          >
-            {hardware.midi === 'denied' ? 'MIDI blocked — try again' : 'Enable MIDI'}
-          </button>
-        )}
-        <span className="side-hint">{HARDWARE_HINT}</span>
-      </section>
+          <header className="panel__head">
+            <h2 className="panel__title">{active.label}</h2>
+            <button
+              type="button"
+              className="panel__hide"
+              data-testid="panel-hide"
+              aria-label="Hide the panel"
+              title="Hide the panel"
+              onClick={() => setPanel(null)}
+            >
+              <X aria-hidden="true" />
+            </button>
+          </header>
+
+          <div className="panel__body">
+            {active.id === 'draw' && (
+              <>
+                {/* One stacked rail of options: every choice is a row the full
+                    width of the panel, so a finger, a mouse or a pen lands on
+                    the one it aimed at instead of between two small tiles. */}
+                <div className="opt-group">
+                  {ALL_TOOLS.map((item, index) => {
+                    const ToolIcon = TOOL_ICONS[item]
+                    return (
+                      <button
+                        key={item}
+                        type="button"
+                        aria-label={`Select the ${TOOL_LABELS[item].toLowerCase()} tool`}
+                        aria-pressed={tool === item}
+                        data-testid={`sidebar-tool-${item}`}
+                        className={`opt-row ${tool === item ? 'opt-row--on' : ''}`}
+                        onClick={() => setTool(item)}
+                      >
+                        <ToolIcon className="opt-row__icon" aria-hidden="true" />
+                        <span className="opt-row__label">{TOOL_LABELS[item]}</span>
+                        <span className="key-hint">{index + 1}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+
+                <div className="opt-group opt-group--split">
+                  {COLORS.map((swatch) => (
+                    <button
+                      key={swatch}
+                      type="button"
+                      aria-label={`Select ${COLOR_LABELS[swatch].toLowerCase()}`}
+                      aria-pressed={color === swatch}
+                      data-testid={`sidebar-colour-${swatch}`}
+                      className={`opt-row ${color === swatch ? 'opt-row--on' : ''}`}
+                      onClick={() => setColor(swatch)}
+                    >
+                      <span
+                        className="opt-row__swatch"
+                        style={{ background: swatch }}
+                        aria-hidden="true"
+                      />
+                      <span className="opt-row__label">{COLOR_LABELS[swatch]}</span>
+                    </button>
+                  ))}
+                  <span className="side-hint">C and X cycle the colours</span>
+                </div>
+
+                <div className="opt-group opt-group--split">
+                  <button
+                    type="button"
+                    className="opt-row"
+                    data-testid="sidebar-undo"
+                    onClick={onUndo}
+                    disabled={!canUndo}
+                    title="Undo last stroke"
+                  >
+                    <Undo2 className="opt-row__icon" aria-hidden="true" />
+                    <span className="opt-row__label">Undo</span>
+                    <span className="key-hint">Z</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="opt-row"
+                    data-testid="sidebar-clear"
+                    onClick={onClear}
+                    disabled={!canUndo}
+                    title="Clear all strokes"
+                  >
+                    <Trash2 className="opt-row__icon" aria-hidden="true" />
+                    <span className="opt-row__label">Clear</span>
+                    <span className="key-hint">Del</span>
+                  </button>
+                </div>
+
+                <span className="side-hint">
+                  Strokes go on air with the picture. A co-host can draw on the same program.
+                </span>
+              </>
+            )}
+
+            {active.id === 'input' && (
+              <>
+                <button
+                  type="button"
+                  className="chip chip--wide"
+                  data-testid="add-input"
+                  onClick={() => setShowAdd(true)}
+                >
+                  <Plus aria-hidden="true" />
+                  Add input
+                </button>
+
+                {screenNotice && (
+                  <p className="side-note" data-testid="screen-notice" role="alert">
+                    {screenNotice}
+                  </p>
+                )}
+                {cameras.notice && (
+                  <p className="side-note" data-testid="camera-notice" role="alert">
+                    {cameras.notice}
+                  </p>
+                )}
+                {media.notice && (
+                  <p className="side-note" data-testid="media-notice" role="alert">
+                    {media.notice}
+                  </p>
+                )}
+                {sources.length === 0 ? (
+                  <span className="side-empty" data-testid="feeds-empty">
+                    No inputs yet
+                  </span>
+                ) : (
+                  <div className="feed-list">
+                    {sources.map((source) => (
+                      <FeedCard
+                        key={source.id}
+                        source={source}
+                        selected={selectedId === source.id}
+                        onSelect={onSelect}
+                        onRemove={removeInput}
+                      />
+                    ))}
+                  </div>
+                )}
+                <span className="side-hint">Tap an input to put it on the program · [ ] flip feeds</span>
+                {selectedMedia && <MediaTransport element={selectedMedia.element} />}
+
+                {/* The program's picture-in-picture. It belongs to what is on
+                    the inputs, so it is the last row here rather than a panel
+                    of its own. */}
+                <label className="field field--split">
+                  <span className="field__label">
+                    <PictureInPicture2 aria-hidden="true" />
+                    Corner camera
+                  </span>
+                  <select
+                    className="field__select"
+                    data-testid="corner-select"
+                    value={cornerId ?? ''}
+                    onChange={(event) => onCornerChange(event.target.value || null)}
+                  >
+                    <option value="">None</option>
+                    {sources
+                      .filter((source) => source.id !== selectedId)
+                      .map((source) => (
+                        <option key={source.id} value={source.id}>
+                          {source.label}
+                        </option>
+                      ))}
+                  </select>
+                </label>
+                <span className="side-hint">
+                  The corner camera is the picture-in-picture: bottom-right on air, with a replay
+                  keeping the live feed in the top-right.
+                </span>
+              </>
+            )}
+
+            {active.id === 'audio' && <AudioControls {...audio} />}
+
+            {active.id === 'replay' && (
+              <>
+                <ReplayControls {...replay} />
+                <span className="side-hint">R replay · L live</span>
+              </>
+            )}
+
+            {active.id === 'cohosts' && (
+              <>
+                <button
+                  type="button"
+                  className="chip chip--wide"
+                  data-testid="create-camera-link"
+                  disabled={camera.status === 'opening'}
+                  onClick={camera.link ? () => setShowQr(true) : camera.createLink}
+                >
+                  <QrCode aria-hidden="true" />
+                  {inviteLabel}
+                </button>
+                {camera.cohosts.length === 0 ? (
+                  <span className="side-empty" data-testid="cohosts-empty">
+                    No co-hosts connected
+                  </span>
+                ) : (
+                  <ul className="cohost-list" data-testid="cohost-list">
+                    {camera.cohosts.map((cohost) => (
+                      <li key={cohost.id} className="cohost" data-testid={`cohost-${cohost.id}`}>
+                        <span className="cohost__name">{cohost.label}</span>
+                        {cohost.streaming && <span className="cohost__tag">camera</span>}
+                        <button
+                          type="button"
+                          className="cohost__drop"
+                          aria-label={`Disconnect ${cohost.label}`}
+                          data-testid={`cohost-disconnect-${cohost.id}`}
+                          onClick={() => camera.disconnect(cohost.id)}
+                        >
+                          <X aria-hidden="true" />
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <span className="side-hint">
+                  Invited co-hosts draw on the program from their phone; their strokes go on air
+                  with yours.
+                </span>
+                {camera.link && (
+                  <button
+                    type="button"
+                    className="chip"
+                    data-testid="camera-stop"
+                    onClick={camera.stop}
+                  >
+                    End co-host session
+                  </button>
+                )}
+                {camera.notice && (
+                  <p className="side-note" data-testid="camlink-notice" role="alert">
+                    {camera.notice}
+                  </p>
+                )}
+              </>
+            )}
+
+            {active.id === 'broadcast' && (
+              <>
+                {live ? (
+                  <>
+                    <span className="side-status">You are live</span>
+                    <div className="row">
+                      <button
+                        type="button"
+                        className="chip"
+                        data-testid="broadcast-qr"
+                        onClick={() => setShowWatchQr(true)}
+                      >
+                        Show viewer QR
+                      </button>
+                      <button
+                        type="button"
+                        className="chip"
+                        data-testid="broadcast-stop"
+                        onClick={broadcast.stop}
+                      >
+                        Stop
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <span className="side-status">
+                      {canBroadcast ? 'Ready to go live' : 'Nothing to broadcast yet'}
+                    </span>
+                    {!canBroadcast && (
+                      <span className="side-empty">Share a tab or open a video first</span>
+                    )}
+                  </>
+                )}
+                {broadcast.notice && (
+                  <p className="side-note" data-testid="broadcast-notice" role="alert">
+                    {broadcast.notice}
+                  </p>
+                )}
+                <span className="side-hint">
+                  Viewers join at the live edge; the invite link is minted when you go live.
+                </span>
+              </>
+            )}
+
+            {active.id === 'hardware' && (
+              <>
+                <span className="side-status" data-testid="hardware-gamepads">
+                  {hardware.gamepads.length === 0
+                    ? 'No gamepad detected'
+                    : `Gamepad: ${hardware.gamepads.join(', ')}`}
+                </span>
+                {hardware.midi === 'unsupported' ? (
+                  <span className="side-empty">MIDI isn’t available in this browser</span>
+                ) : hardware.midi === 'on' ? (
+                  <span className="side-status" data-testid="hardware-midi">
+                    MIDI connected
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    className="chip"
+                    data-testid="hardware-midi-enable"
+                    onClick={() => void hardware.enableMidi()}
+                  >
+                    {hardware.midi === 'denied' ? 'MIDI blocked — try again' : 'Enable MIDI'}
+                  </button>
+                )}
+                <span className="side-hint">{HARDWARE_HINT}</span>
+              </>
+            )}
+          </div>
+        </section>
+      )}
+
+      {/* The rail: one tile per group, always on screen, spread over the full
+          height. The utilities sit together at the base, past the divider. */}
+      <nav className="rail" aria-label="Panels">
+        <div className="rail__main">
+          {mainPanels.map((item) => (
+            <RailTile
+              key={item.id}
+              spec={item}
+              badge={panelBadge(item.id, status)}
+              open={active?.id === item.id}
+              onToggle={() => togglePanel(item.id)}
+            />
+          ))}
+        </div>
+        <div className="rail__util">
+          <span className="rail__split" aria-hidden="true" />
+          {utilityPanels.map((item) => (
+            <RailTile
+              key={item.id}
+              spec={item}
+              badge={panelBadge(item.id, status)}
+              open={active?.id === item.id}
+              onToggle={() => togglePanel(item.id)}
+            />
+          ))}
+        </div>
+      </nav>
 
       {showAdd && (
         <AddInputModal
@@ -396,9 +567,50 @@ export function Sidebar({
 }
 
 /**
+ * One tile on the rail: an outline glyph, its name, and the panel's live badge
+ * when it has something to report. Clicking the open panel's tile closes it,
+ * which is what hides the panel for a clean picture.
+ */
+function RailTile({
+  spec,
+  badge,
+  open,
+  onToggle,
+}: {
+  spec: PanelSpec
+  badge: PanelBadge | null
+  open: boolean
+  onToggle: () => void
+}) {
+  const Icon = PANEL_ICONS[spec.id]
+  return (
+    <button
+      type="button"
+      className={`rail__item ${open ? 'rail__item--on' : ''}`}
+      data-testid={`panel-tab-${spec.id}`}
+      aria-expanded={open}
+      aria-controls="workbench-panel"
+      onClick={onToggle}
+    >
+      <Icon className="rail__icon" strokeWidth={RAIL_STROKE} aria-hidden="true" />
+      <span className="rail__label">{spec.label}</span>
+      {badge && (
+        <span
+          className={`rail__badge rail__badge--${badge.tone}`}
+          data-testid={`panel-badge-${spec.id}`}
+        >
+          {badge.text}
+        </span>
+      )}
+    </button>
+  )
+}
+
+/**
  * A single input row: a small live thumbnail, its label, and — for an input the
- * host can stop from here — a ✕. The row itself is the pick target; the ✕ is a
- * sibling rather than a nested button, which HTML would not allow.
+ * host can stop from here — a close button. The row itself is the pick target;
+ * the close button is a sibling rather than a nested button, which HTML would
+ * not allow.
  */
 function FeedCard({
   source,
@@ -433,7 +645,7 @@ function FeedCard({
           data-testid={`feed-remove-${source.id}`}
           onClick={() => onRemove(source)}
         >
-          ✕
+          <X aria-hidden="true" />
         </button>
       )}
     </div>

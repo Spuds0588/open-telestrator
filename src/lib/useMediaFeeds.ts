@@ -118,14 +118,17 @@ export function useMediaFeeds(): MediaFeeds {
     [release],
   )
 
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    // Set on every mount, not just from the initial value: React remounts an
+    // effect once in development, and a flag that only ever goes false would
+    // make every feed opened afterwards look unmounted and vanish silently.
+    mountedRef.current = true
+    return () => {
       mountedRef.current = false
       for (const entry of entriesRef.current.values()) release(entry)
       entriesRef.current.clear()
-    },
-    [release],
-  )
+    }
+  }, [release])
 
   /**
    * Open one feed: hand the element to `load`, wait for a picture, then turn it

@@ -1,5 +1,16 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import {
+  Cast,
+  Maximize,
+  Minimize,
+  Pause,
+  PictureInPicture2,
+  Play,
+  Volume1,
+  Volume2,
+  VolumeX,
+} from 'lucide-react'
 import Peer, { type DataConnection, type MediaConnection } from 'peerjs'
 import {
   HEARTBEAT_MS,
@@ -20,7 +31,7 @@ import {
   pickPipMode,
   pickRecorderMime,
   stepVolume,
-  volumeGlyph,
+  volumeLevel,
   type CastState,
 } from '../lib/player'
 import { peerOptions } from '../lib/peerConfig'
@@ -866,7 +877,8 @@ export default function ViewerApp() {
   const missingLink = session === null
   const showRetry = !missingLink && (status === 'ended' || status === 'full' || status === 'error')
   const live = status === 'live'
-  const bigGlyph = playing ? '❚❚' : '▶'
+  const level = volumeLevel(volume, muted)
+  const VolumeIcon = level === 'muted' ? VolumeX : level === 'low' ? Volume1 : Volume2
   const pipMode = pickPipMode(getDocumentPip() !== null, hasVideoPip())
   // An embedded player stays uncluttered: the status chip belongs to the viewer
   // page, and even there it is only noise once the picture is live.
@@ -950,7 +962,12 @@ export default function ViewerApp() {
                   {notice}
                 </span>
               )}
-              {cast === 'connected' && <span className="player__chip player__chip--cast">📺 Casting</span>}
+              {cast === 'connected' && (
+                <span className="player__chip player__chip--cast">
+                  <Cast aria-hidden="true" />
+                  Casting
+                </span>
+              )}
             </div>
 
             {!missingLink && !live && !fromPause && !showRetry && (
@@ -976,7 +993,7 @@ export default function ViewerApp() {
                   aria-label={playing ? 'Pause' : 'Play'}
                   onClick={onBigButton}
                 >
-                  {bigGlyph}
+                  {playing ? <Pause aria-hidden="true" /> : <Play aria-hidden="true" />}
                 </button>
               )}
 
@@ -988,7 +1005,7 @@ export default function ViewerApp() {
                   aria-label={playing ? 'Pause' : 'Play'}
                   onClick={() => (live || fromPause ? togglePlay() : onBigButton())}
                 >
-                  {playing ? '❚❚' : '▶'}
+                  {playing ? <Pause aria-hidden="true" /> : <Play aria-hidden="true" />}
                 </button>
 
                 <button
@@ -999,7 +1016,7 @@ export default function ViewerApp() {
                   aria-label={muted ? 'Unmute' : 'Mute'}
                   onClick={toggleMute}
                 >
-                  {volumeGlyph(volume, muted)}
+                  <VolumeIcon aria-hidden="true" />
                 </button>
 
                 <input
@@ -1036,7 +1053,7 @@ export default function ViewerApp() {
                     aria-label={docPip ? 'Close the floating player' : 'Picture in picture'}
                     onClick={togglePip}
                   >
-                    ⧉
+                    <PictureInPicture2 aria-hidden="true" />
                   </button>
                 )}
 
@@ -1050,7 +1067,7 @@ export default function ViewerApp() {
                     disabled={cast === 'connecting'}
                     onClick={startCast}
                   >
-                    📺
+                    <Cast aria-hidden="true" />
                   </button>
                 )}
 
@@ -1061,7 +1078,8 @@ export default function ViewerApp() {
                   aria-label={fullscreen ? 'Exit full screen' : 'Full screen'}
                   onClick={toggleFullscreen}
                 >
-                  {fullscreen ? '⛶ Exit' : '⛶'}
+                  {fullscreen ? <Minimize aria-hidden="true" /> : <Maximize aria-hidden="true" />}
+                  {fullscreen ? 'Exit' : ''}
                 </button>
               </div>
             </div>

@@ -11,30 +11,40 @@ Free & open-source sports telestrator & P2P broadcasting studio. Draw over any l
 Desktop-only browser PWA — **capture, telestration, instant replay, stage audio,
 a magic-link cameraman feed, opened video files and streams, and a viewer
 broadcast that fans the composited program out to phones as a PeerJS tree**.
-Everything lives in one compact sidebar on the right: the drawing tools; an
-an **Input** group with a single **＋ Add input** button: it opens a picker to
-share a tab, open any of the host's own cameras (an array of USB cameras shows
-up as several feeds), drop in a video file or paste an HLS/MP4 URL, and that
-input's preview then joins the list, each one clickable to put it on the program
-and removable from the same row; a **Program** group with the on-air corner camera and the transport
-for an opened file; the **Audio** mixer (announcer mic and captured program
-audio, each with mute, volume and a live level meter); **Instant replay**; a
-**Co-hosts** group that mints the invite link and QR, lists who is connected and
-can drop one; **Broadcast**; and **Hardware** triggers. The 16:9 stage is scaled with
-`transform` to fit, so the video keeps its ratio without squeezing the sidebar,
-and the telestration canvas draws straight on top. Cameraman invites open a large
-QR dialog with a copyable link. Keyboard shortcuts are badges on the controls they
-belong to.
-The **Broadcast** group goes live to viewers and shows how many are watching; the
-same count is reported to any connected co-host, who can also draw on the same
-canvas (see **Shared drawing** below).
+The controls are a rail of icon tiles on the right of the stage with one panel
+open in front of it, so no group can scroll out of reach and every tile is sized
+for a fingertip or a stylus. Each tile carries its own live badge — how many
+inputs are on the stage, whether the mic is hot, who has joined the link, the
+viewer count while on air — so a closed panel still says what it is doing.
+Clicking the open tile, or the panel's ✕, hides the panel entirely for a
+clean picture while broadcasting. The **Input** panel is the one home for
+sources: a **＋ Add input** button opens a picker to share a tab, open any of the
+host's own cameras (an array of USB cameras shows up as several feeds), drop in a
+video file or paste an HLS/MP4 URL; the list below it puts an input on the
+program with one click and stops it from the same row; the transport for an
+opened file sits under the list, and the panel ends with the **corner camera** —
+the picture-in-picture that sits bottom-right on air. Alongside it: the **Audio**
+mixer (announcer mic and captured program audio, each with mute, volume and a
+live level meter); **Replay**; **Co-hosts**, which mints the invite link and QR,
+lists who is connected and can drop one; **Broadcast**; and a **Hardware**
+utility at the foot of the rail. Icons are Lucide outlines, bundled with the app
+and drawn in the colour of the control they sit in. The 16:9 stage is scaled with
+`transform` to fit, so the video keeps its ratio without squeezing the rail, and
+the telestration canvas draws straight on top. Cameraman invites open a large QR
+dialog with a copyable link. The **Draw** panel stacks its tools, colours and
+history as full-width rows with their keyboard shortcuts written on them, so a
+mouse, a finger or a pen picks one without a near-miss.
+Going live happens from the strip pinned at the top of every panel — the program
+on air, the **Go live** button, or the viewer count once live. That same count is
+reported to any connected co-host, who can also draw on the same canvas (see
+**Shared drawing** below).
 Phones and tablets are not supported by this web app and get a notice pointing
 at the GitHub releases instead; the cameraman and viewer pages still work on any
 device.
 
 ## Cameraman magic link
 
-On the host, **Co-hosts → 🎨 Invite a co-host** mints a session link. Opening it
+On the host, **Co-hosts → Invite a co-host** mints a session link. Opening it
 on a phone loads a tiny view (code-split, so it never downloads the host stage)
 that can share the camera and draw on the program — the camera is optional, so a
 co-host who is only there to telestrate never has to grant it. Every connected
@@ -254,7 +264,7 @@ npm run preview    # serve the production build
 Open the studio, click **＋ Add input → Share a tab or screen**, pick a browser
 tab, then draw. The same picker opens a camera, drops in a video file or takes a
 stream URL; click any input in the list to put it on the program, or its ✕ to
-stop it. Invite a co-host from the **Co-hosts** group. The **Audio** section
+stop it. Invite a co-host from the **Co-hosts** panel. The **Audio** panel
 enables and mixes the announcer mic, and **Replay** plays the last several
 seconds at 0.5×.
 
