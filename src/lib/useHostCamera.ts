@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import Peer, { type MediaConnection } from 'peerjs'
-import { buildCameraLink, createToken } from './cameraLink'
+import Peer, { type DataConnection, type MediaConnection } from 'peerjs'
+import { VIEWERS_REPORT_MS, buildCameraLink, createToken, viewersReport } from './cameraLink'
 import { peerOptions } from './peerConfig'
 
 /** A remote camera feed that has connected and is streaming to this host. */
@@ -32,10 +32,13 @@ export interface HostCamera {
  * One PeerJS peer receives incoming media calls. A call is only answered when
  * its metadata carries this session's token; every other call is closed without
  * an answer. `answer()` is called with **no stream**, so the host sends no media
- * back and nothing from the stage can leak to the cameraman — the transport is
+ * back and nothing from the stage can leak to the cameraman — the media path is
  * strictly one-way.
+ *
+ * The only thing that does travel back is the viewer count, over a small
+ * token-checked data channel, so a co-host can see how many people are watching.
  */
-export function useHostCamera(): HostCamera {
+export function useHostCamera(viewers: number): HostCamera {
   const [status, setStatus] = useState<HostCameraStatus>('idle')
   const [notice, setNotice] = useState<string | null>(null)
   const [link, setLink] = useState<string | null>(null)
@@ -44,10 +47,32 @@ export function useHostCamera(): HostCamera {
   const peerRef = useRef<Peer | null>(null)
   const tokenRef = useRef<string | null>(null)
   const callsRef = useRef(new Map<string, MediaConnection>())
+  /** Co-hosts listening for the viewer count. */
+  const connsRef = useRef(new Map<string, DataConnection>())
+  const viewersRef = useRef(viewers)
+
+  const sendReport = useCallback((conn: DataConnection) => {
+    if (conn.open) conn.send(viewersReport(viewersRef.current))
+  }, [])
+
+  /** Push the current count to every co-host that is listening. */
+  const reportViewers = useCallback(() => {
+    if (connsRef.current.size === 0) return
+    for (const conn of connsRef.current.values()) sendReport(conn)
+  }, [sendReport])
+
+  // Send on every change so the number moves as soon as it does, but never less
+  // often than the repeating timer below.
+  useEffect(() => {
+    viewersRef.current = viewers
+    reportViewers()
+  }, [viewers, reportViewers])
 
   const closeAll = useCallback(() => {
     for (const call of callsRef.current.values()) call.close()
     callsRef.current.clear()
+    for (const conn of connsRef.current.values()) conn.close()
+    connsRef.current.clear()
     peerRef.current?.destroy()
     peerRef.current = null
     tokenRef.current = null
@@ -61,16 +86,26 @@ export function useHostCamera(): HostCamera {
     setNotice(null)
   }, [closeAll])
 
-  // Never leave a peer or its calls alive past unmount.
+  // Never leave a peer, its calls or its data channels alive past unmount.
   useEffect(
     () => () => {
       for (const call of callsRef.current.values()) call.close()
       callsRef.current.clear()
+      for (const conn of connsRef.current.values()) conn.close()
+      connsRef.current.clear()
       peerRef.current?.destroy()
       peerRef.current = null
     },
     [],
   )
+
+  // While a camera session is open, repeat the count on a timer: the co-host's
+  // number has to survive a dropped message, and it costs a few bytes.
+  useEffect(() => {
+    if (status !== 'ready') return
+    const timer = window.setInterval(reportViewers, VIEWERS_REPORT_MS)
+    return () => window.clearInterval(timer)
+  }, [status, reportViewers])
 
   const createLink = useCallback(() => {
     if (peerRef.current) return
@@ -120,7 +155,25 @@ export function useHostCamera(): HostCamera {
       })
       callsRef.current.set(id, call)
     })
-  }, [])
+
+    // The co-host's reporting channel. Same token check as a media call, so a
+    // guessed link cannot subscribe to anything.
+    peer.on('connection', (conn) => {
+      const metadata = conn.metadata as { token?: string } | undefined
+      if (!metadata || metadata.token !== tokenRef.current) {
+        conn.close()
+        return
+      }
+      connsRef.current.set(conn.peer, conn)
+      conn.on('close', () => {
+        if (connsRef.current.get(conn.peer) === conn) connsRef.current.delete(conn.peer)
+      })
+      // Report as soon as the channel is usable, so the co-host's number is
+      // right before the first repeating tick arrives.
+      if (conn.open) sendReport(conn)
+      else conn.on('open', () => sendReport(conn))
+    })
+  }, [sendReport])
 
   return { status, notice, link, sources, createLink, stop }
 }

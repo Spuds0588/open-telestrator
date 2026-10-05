@@ -11,11 +11,42 @@
 /** Query parameter holding the host's PeerJS id. Also the cameraman page's marker. */
 export const CAMERA_PARAM = 'camera'
 
+/**
+ * How often the host repeats the viewer count to its co-hosts. The media path
+ * stays one-way — a cameraman never receives the program — so this number
+ * travels on its own small data channel, and it is repeated rather than sent
+ * only on change: one dropped message would otherwise leave a stale count on a
+ * screen nobody is watching.
+ */
+export const VIEWERS_REPORT_MS = 3000
+
 export interface CameraSession {
   /** The host PeerJS id the cameraman must call. */
   hostId: string
   /** Per-session secret the host verifies before answering. */
   token: string
+}
+
+/** What the host tells a co-host over the camera link's data channel. */
+export interface CameraReport {
+  t: 'viewers'
+  /** Viewers currently being fed anywhere in the broadcast tree. */
+  count: number
+}
+
+/** Builds the viewer count the host pushes to its co-hosts. */
+export function viewersReport(count: number): CameraReport {
+  return { t: 'viewers', count: count > 0 ? Math.floor(count) : 0 }
+}
+
+/** Validates an untrusted data-channel payload into a known report. */
+export function parseCameraReport(raw: unknown): CameraReport | null {
+  if (typeof raw !== 'object' || raw === null) return null
+  const message = raw as Record<string, unknown>
+  if (message.t !== 'viewers') return null
+  const count = message.count
+  if (typeof count !== 'number' || !Number.isFinite(count) || count < 0) return null
+  return { t: 'viewers', count: Math.floor(count) }
 }
 
 /** A fresh, unguessable per-session token. */

@@ -39,7 +39,10 @@ const GITHUB_URL = 'https://github.com/Spuds0588/open-telestrator'
 export default function App() {
   const capture = useDisplayCapture()
   const webcam = useCameraCapture()
-  const camera = useHostCamera()
+  // The viewer tree comes first: the cameraman session reports its count to the
+  // co-hosts, so it needs the number to exist before it is created.
+  const broadcast = useBroadcast()
+  const camera = useHostCamera(broadcast.viewers)
 
   // The stage's inputs, in program order: the host's shared screen, the host's
   // own camera, then every cameraman currently streaming in. Exactly one of
@@ -64,8 +67,7 @@ export default function App() {
   const videoRef = useRef<HTMLVideoElement>(null)
   const replay = useReplay(selected?.stream ?? null, videoRef)
 
-  // Viewer tree: the host publishes the program video plus the stage audio mix.
-  const broadcast = useBroadcast()
+  // The host publishes the program video plus the stage audio mix.
   const program = selected?.stream ?? null
   const { status: broadcastStatus, setStream: publishStream } = broadcast
   const { captureStream } = audio

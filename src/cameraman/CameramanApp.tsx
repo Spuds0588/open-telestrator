@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
-import Peer, { type MediaConnection } from 'peerjs'
-import { parseCameraLink, type CameraSession } from '../lib/cameraLink'
+import Peer, { type DataConnection, type MediaConnection } from 'peerjs'
+import { parseCameraLink, parseCameraReport, type CameraSession } from '../lib/cameraLink'
 import { classifyCameraError } from '../lib/mediaErrors'
 import { peerOptions } from '../lib/peerConfig'
 
@@ -42,11 +42,14 @@ export default function CameramanApp() {
     session ? null : 'This camera link is incomplete. Ask the host for a fresh link.',
   )
   const [preview, setPreview] = useState<MediaStream | null>(null)
+  /** How many people are watching, as last reported by the host. */
+  const [viewers, setViewers] = useState<number | null>(null)
 
   const videoRef = useRef<HTMLVideoElement>(null)
   const peerRef = useRef<Peer | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
   const callRef = useRef<MediaConnection | null>(null)
+  const reportConnRef = useRef<DataConnection | null>(null)
   const timerRef = useRef<number | null>(null)
 
   const teardown = useCallback(() => {
@@ -56,11 +59,14 @@ export default function CameramanApp() {
     }
     callRef.current?.close()
     callRef.current = null
+    reportConnRef.current?.close()
+    reportConnRef.current = null
     peerRef.current?.destroy()
     peerRef.current = null
     streamRef.current?.getTracks().forEach((track) => track.stop())
     streamRef.current = null
     setPreview(null)
+    setViewers(null)
   }, [])
 
   useEffect(() => () => teardown(), [teardown])
@@ -115,6 +121,18 @@ export default function CameramanApp() {
       // in the call metadata; the host closes the call if it doesn't match.
       const call = peer.call(session.hostId, media, { metadata: { token: session.token } })
       callRef.current = call
+
+      // No media comes back, but a small data channel does: the host repeats the
+      // viewer count so we can show how many people are watching.
+      const report = peer.connect(session.hostId, {
+        reliable: true,
+        metadata: { token: session.token },
+      })
+      reportConnRef.current = report
+      report.on('data', (raw) => {
+        const message = parseCameraReport(raw)
+        if (message) setViewers(message.count)
+      })
 
       call.on('close', () => {
         // The host rejected the token or hung up: no media was ever established.
@@ -194,6 +212,12 @@ export default function CameramanApp() {
           <span className="brand__dot" aria-hidden="true" />
           <h1>Cameraman</h1>
         </div>
+        {viewers !== null && (
+          <span className="camera__viewers" data-testid="camera-viewers">
+            <span aria-hidden="true">👁</span>{' '}
+            {viewers === 1 ? '1 viewer' : `${viewers} viewers`}
+          </span>
+        )}
       </header>
 
       <main className="camera__main">

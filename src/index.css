@@ -578,6 +578,18 @@ body {
   height: 10px;
 }
 
+/* Viewer count the host reports to a co-host: one number, nothing more. */
+.camera__viewers {
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--muted);
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 4px 10px;
+  white-space: nowrap;
+}
+
 .camera__topbar .brand h1 {
   font-size: 14px;
 }

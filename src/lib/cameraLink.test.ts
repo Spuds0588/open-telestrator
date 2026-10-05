@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { buildCameraLink, createToken, parseCameraLink } from './cameraLink'
+import {
+  buildCameraLink,
+  createToken,
+  parseCameraLink,
+  parseCameraReport,
+  viewersReport,
+} from './cameraLink'
 
 describe('createToken', () => {
   it('returns a 32-character hex token', () => {
@@ -34,5 +40,31 @@ describe('buildCameraLink / parseCameraLink', () => {
     expect(parseCameraLink('https://example.com/?camera=only')).toBeNull()
     expect(parseCameraLink('https://example.com/?t=only')).toBeNull()
     expect(parseCameraLink('not a url')).toBeNull()
+  })
+})
+
+describe('viewer reports', () => {
+  it('round-trips a count the host built', () => {
+    expect(parseCameraReport(viewersReport(7))).toEqual({ t: 'viewers', count: 7 })
+  })
+
+  it('never reports a negative count', () => {
+    expect(viewersReport(-3)).toEqual({ t: 'viewers', count: 0 })
+    expect(parseCameraReport({ t: 'viewers', count: -1 })).toBeNull()
+  })
+
+  it('rejects junk, unknown messages and impossible counts', () => {
+    expect(parseCameraReport(null)).toBeNull()
+    expect(parseCameraReport('viewers')).toBeNull()
+    expect(parseCameraReport({})).toBeNull()
+    expect(parseCameraReport({ t: 'watchers', count: 2 })).toBeNull()
+    expect(parseCameraReport({ t: 'viewers' })).toBeNull()
+    expect(parseCameraReport({ t: 'viewers', count: 'two' })).toBeNull()
+    expect(parseCameraReport({ t: 'viewers', count: Number.NaN })).toBeNull()
+    expect(parseCameraReport({ t: 'viewers', count: Number.POSITIVE_INFINITY })).toBeNull()
+  })
+
+  it('floors a fractional count rather than showing a fraction of a viewer', () => {
+    expect(parseCameraReport({ t: 'viewers', count: 2.7 })).toEqual({ t: 'viewers', count: 2 })
   })
 })

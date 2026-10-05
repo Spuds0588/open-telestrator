@@ -20,7 +20,8 @@ to fit, so the video keeps its ratio without squeezing the sidebar, and the
 telestration canvas draws straight on top. Cameraman invites open a large QR
 dialog with a copyable link. Keyboard shortcuts are badges on the controls they
 belong to.
-The **Broadcast** group goes live to viewers and shows how many are watching.
+The **Broadcast** group goes live to viewers and shows how many are watching; the
+same count is reported to any connected co-host.
 Phones and tablets are not supported by this web app and get a notice pointing
 at the GitHub releases instead; the cameraman and viewer pages still work on any
 device. Shared-drawing collaboration is not built yet.
@@ -30,9 +31,12 @@ device. Shared-drawing collaboration is not built yet.
 On the host, click **🎥 Invite a cameraman** to mint a session link. Opening that
 link on a phone loads a tiny cameraman view (code-split, so it never downloads
 the host stage) that asks for the camera and streams it to the host over PeerJS.
-The transport is strictly **one-way**: the host answers each media call with no
-return stream, and the link's per-session token is checked first — a call whose
-token does not match is closed without an answer. Accepted feeds appear in the
+The media transport is strictly **one-way**: the host answers each media call with
+no return stream, and the link's per-session token is checked first — a call whose
+token does not match is closed without an answer. A small data channel in the
+other direction carries one thing back, the viewer count, so the cameraman can
+see how many people are watching; it is repeated every few seconds rather than
+sent only on change, so a dropped message cannot leave a stale number on screen. Accepted feeds appear in the
 **Sources** row and can be selected as the program input alongside the shared
 screen.
 
