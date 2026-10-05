@@ -133,6 +133,9 @@ export default function CameramanApp() {
         const message = parseCameraReport(raw)
         if (message) setViewers(message.count)
       })
+      // No channel, no number: drop the badge rather than leave a count that
+      // may no longer be true sitting next to a dead camera.
+      report.on('close', () => setViewers(null))
 
       call.on('close', () => {
         // The host rejected the token or hung up: no media was ever established.
