@@ -9,7 +9,8 @@
     "build": "npm run typecheck && vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist dev-dist coverage node_modules/.vite node_modules/.vitest *.tsbuildinfo"
   },
   "dependencies": {
     "peerjs": "^1.5.5",
@@ -21,7 +22,6 @@
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react": "^4.3.1",
-    "peer": "^1.0.2",
     "typescript": "^5.5.4",
     "vite": "^5.4.0",
     "vite-plugin-pwa": "^0.20.5",

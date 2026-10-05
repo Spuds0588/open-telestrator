@@ -1,5 +1,8 @@
 node_modules
 dist
 dev-dist
+coverage
+*.tsbuildinfo
+.vite
 *.local
 .DS_Store
