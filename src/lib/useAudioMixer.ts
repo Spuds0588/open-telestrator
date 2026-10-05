@@ -12,6 +12,8 @@ export interface AudioController {
   micNotice: string | null
   /** Whether the current capture actually carries an audio track. */
   gameAvailable: boolean
+  /** The stage mix as a stream, for broadcasting to viewers. */
+  captureStream: () => MediaStream | null
   /** True while any source is producing sound (gates the meter loop). */
   active: boolean
   channels: Record<AudioSource, AudioChannelState>
@@ -48,20 +50,24 @@ export function useAudioMixer(stream: MediaStream | null): AudioController {
     setChannels({ mic: mixer.settingsFor('mic'), game: mixer.settingsFor('game') })
   }, [mixer])
 
+  // Bind the captured game audio to the current program stream. The announcer
+  // mic is a host-owned toggle: it survives switching the program source, so
+  // the host does not lose the mic after a feed change.
   useEffect(() => {
-    setMicStatus('idle')
-    setMicNotice(null)
     if (!stream) {
-      mixer.stop()
+      mixer.detachGame()
       setGameAvailable(false)
       return
     }
     setGameAvailable(mixer.attachGame(stream))
     mixer.resume()
     return () => {
-      mixer.stop()
+      mixer.detachGame()
     }
   }, [stream, mixer])
+
+  // The whole graph (and the mic) is released only when the app goes away.
+  useEffect(() => () => mixer.stop(), [mixer])
 
   const enableMic = useCallback(async () => {
     setMicStatus('requesting')
@@ -101,11 +107,13 @@ export function useAudioMixer(stream: MediaStream | null): AudioController {
   )
 
   const level = useCallback((source: AudioSource) => mixer.readLevel(source), [mixer])
+  const captureStream = useCallback(() => mixer.captureStream(), [mixer])
 
   return {
     micStatus,
     micNotice,
     gameAvailable,
+    captureStream,
     active: micStatus === 'on' || gameAvailable,
     channels,
     enableMic,

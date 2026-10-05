@@ -4,6 +4,8 @@ import { useHostCamera } from '../lib/useHostCamera'
 import type { StageSource } from '../lib/sources'
 import type { AudioController } from '../lib/useAudioMixer'
 import type { ReplayController } from '../lib/useReplay'
+import type { BroadcastController } from '../lib/useBroadcast'
+import { useQrCode } from '../lib/useQrCode'
 import { ALL_TOOLS, COLORS, toolGlyph, type Tool } from '../lib/telestration'
 import { AudioControls } from './AudioControls'
 import { ReplayControls } from './ReplayControls'
@@ -36,6 +38,8 @@ export function Sidebar({
   onSelect,
   audio,
   replay,
+  broadcast,
+  canBroadcast,
 }: {
   tool: Tool
   setTool: (tool: Tool) => void
@@ -57,10 +61,14 @@ export function Sidebar({
   onSelect: (id: string) => void
   audio: AudioController
   replay: ReplayController
+  broadcast: BroadcastController
+  canBroadcast: boolean
 }) {
   // The QR dialog opens as soon as a cameraman link is minted, and can be
   // reopened from the input buttons later.
   const [showQr, setShowQr] = useState(false)
+  const [showWatchQr, setShowWatchQr] = useState(false)
+  const viewerQr = useQrCode(broadcast.link)
   useEffect(() => {
     if (camera.link) setShowQr(true)
   }, [camera.link])
@@ -217,12 +225,63 @@ export function Sidebar({
         <ReplayControls {...replay} />
       </section>
 
+      <section className="side-group">
+        <h2 className="side-title">Broadcast</h2>
+        {broadcast.status === 'live' ? (
+          <>
+            <span className="side-status" data-testid="broadcast-viewers">
+              {broadcast.viewers === 1 ? '1 viewer' : `${broadcast.viewers} viewers`}
+            </span>
+            <div className="row">
+              <button
+                type="button"
+                className="chip"
+                data-testid="broadcast-qr"
+                onClick={() => setShowWatchQr(true)}
+              >
+                Show QR
+              </button>
+              <button type="button" className="chip" data-testid="broadcast-stop" onClick={broadcast.stop}>
+                Stop
+              </button>
+            </div>
+          </>
+        ) : (
+          <button
+            type="button"
+            className="chip chip--wide"
+            data-testid="broadcast-start"
+            disabled={!canBroadcast || broadcast.status === 'opening'}
+            onClick={broadcast.start}
+          >
+            {broadcast.status === 'opening' ? 'Connecting…' : 'Go live to viewers'}
+          </button>
+        )}
+        {!canBroadcast && broadcast.status !== 'live' && (
+          <span className="side-empty">Share a tab or camera first</span>
+        )}
+        {broadcast.notice && (
+          <p className="side-note" data-testid="broadcast-notice" role="alert">
+            {broadcast.notice}
+          </p>
+        )}
+      </section>
+
       {showQr && camera.link && (
         <QrModal
           title="Cameraman link"
           url={camera.link}
           qr={qr}
           onClose={() => setShowQr(false)}
+        />
+      )}
+
+      {showWatchQr && broadcast.link && (
+        <QrModal
+          title="Viewer link"
+          url={broadcast.link}
+          qr={viewerQr}
+          onClose={() => setShowWatchQr(false)}
         />
       )}
     </aside>

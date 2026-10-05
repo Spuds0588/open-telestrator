@@ -66,6 +66,7 @@ export function classifyMicError(cause: unknown): {
 export class AudioMixer {
   private context: AudioContext | null = null
   private master: GainNode | null = null
+  private capture: MediaStreamAudioDestinationNode | null = null
   private micStream: MediaStream | null = null
   private readonly channels = new Map<AudioSource, Channel>()
   private readonly settings: Record<AudioSource, AudioChannelState> = {
@@ -100,6 +101,27 @@ export class AudioMixer {
   resume(): void {
     const context = this.context
     if (context && context.state === 'suspended') void context.resume().catch(() => undefined)
+  }
+
+  /**
+   * The stage mix as a MediaStream, for broadcasting to viewers. Safe to call
+   * before anything is attached: the destination is created on demand and the
+   * same stream is reused for the life of the graph.
+   */
+  captureStream(): MediaStream | null {
+    const context = this.ensureContext()
+    if (!context || !this.master) return null
+    if (!this.capture) {
+      this.capture = context.createMediaStreamDestination()
+      this.master.connect(this.capture)
+    }
+    this.resume()
+    return this.capture.stream
+  }
+
+  /** Detach the captured game audio, leaving the mic and context untouched. */
+  detachGame(): void {
+    this.detach('game')
   }
 
   /**
@@ -173,6 +195,8 @@ export class AudioMixer {
     this.detach('game')
     this.master?.disconnect()
     this.master = null
+    this.capture?.disconnect()
+    this.capture = null
     const context = this.context
     this.context = null
     if (context && context.state !== 'closed') void context.close().catch(() => undefined)

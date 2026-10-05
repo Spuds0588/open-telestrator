@@ -9,7 +9,8 @@ Free & open-source sports telestrator & P2P broadcasting studio. Draw over any l
 ## Status
 
 Desktop-only browser PWA — **capture, telestration, instant replay, stage audio,
-and a magic-link cameraman feed**.
+a magic-link cameraman feed, and a viewer broadcast that fans the program out
+to phones as a PeerJS tree**.
 Everything lives in one compact sidebar on the right: the drawing tools; an
 **Input** stack that shares a tab, starts the host camera and invites
 cameraman(s), with every live feed listed as a clickable thumbnail; the **Audio**
@@ -19,6 +20,7 @@ to fit, so the video keeps its ratio without squeezing the sidebar, and the
 telestration canvas draws straight on top. Cameraman invites open a large QR
 dialog with a copyable link. Keyboard shortcuts are badges on the controls they
 belong to.
+The **Broadcast** group goes live to viewers and shows how many are watching.
 Phones and tablets are not supported by this web app and get a notice pointing
 at the GitHub releases instead; the cameraman and viewer pages still work on any
 device. Shared-drawing collaboration is not built yet.
@@ -47,6 +49,35 @@ VITE_PEER_SECURE=true
 # JSON array of RTCIceServer objects; unset → PeerJS's default STUN.
 VITE_ICE_SERVERS='[{"urls":"stun:stun.example.com:3478"},{"urls":"turn:turn.example.com","username":"u","credential":"p"}]'
 ```
+
+## Broadcasting viewers
+
+Click **Broadcast → Go live to viewers** to mint a viewer link (use **Show QR**
+to put a big scannable code on screen). Viewers open the link and press **Watch**;
+they get the program video plus the stage audio mix, and nothing else — no
+scrubber, no catch-up. A late joiner sees the frames that arrive after it
+connects, and its picture drifts independently of everyone else's. There is no
+shared timeline to fall behind.
+
+Viewers are arranged as a **tree**, so the host's uplink stays at two streams no
+matter how many people watch. Every viewer is also a relay: the host places a
+new viewer under whichever node has spare capacity and that node calls it with
+the live stream it is already receiving.
+
+Because the tree is full of ordinary browsers that can close, the app heals
+itself rather than freezing:
+
+- the host sweeps its viewers and drops any whose transport has failed or gone
+  quiet, so a vanished viewer frees its slot instead of holding it forever;
+- a viewer whose parent disappears — or whose picture simply stops moving for a
+  few seconds — drops its own children and rejoins through the host, and those
+  children do the same, so one failure never freezes a whole branch;
+- a source that delivers a track but no picture is not treated as success, so a
+  dead camera ends with an honest "lost the broadcast" instead of an endless
+  reconnect loop.
+
+Broadcasting is one-way to viewers: they never send video or audio back to the
+host or to each other.
 
 ## Development
 

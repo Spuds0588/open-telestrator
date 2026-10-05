@@ -4,7 +4,9 @@ import { useHostCamera } from './lib/useHostCamera'
 import { useAudioMixer } from './lib/useAudioMixer'
 import { useReplay } from './lib/useReplay'
 import { mergeStageSources } from './lib/sources'
-import { qrOf } from './lib/qrcode'
+import { useBroadcast } from './lib/useBroadcast'
+import { mixBroadcastStream } from './lib/broadcast'
+import { useQrCode } from './lib/useQrCode'
 import {
   COLORS,
   DEFAULT_COLOR,
@@ -62,6 +64,27 @@ export default function App() {
   const videoRef = useRef<HTMLVideoElement>(null)
   const replay = useReplay(selected?.stream ?? null, videoRef)
 
+  // Viewer tree: the host publishes the program video plus the stage audio mix.
+  const broadcast = useBroadcast()
+  const program = selected?.stream ?? null
+  const { status: broadcastStatus, setStream: publishStream } = broadcast
+  const { captureStream } = audio
+  // The published stream is only rebuilt when the program's video track changes.
+  // Audio is mixed live into the same destination, so toggling the announcer mic
+  // must not tear the viewer tree down and build it again.
+  const mixRef = useRef<{ video: MediaStreamTrack | null; stream: MediaStream | null }>({
+    video: null,
+    stream: null,
+  })
+  useEffect(() => {
+    if (broadcastStatus !== 'live') return
+    const video = program?.getVideoTracks()[0] ?? null
+    if (!mixRef.current.stream || mixRef.current.video !== video) {
+      mixRef.current = { video, stream: mixBroadcastStream(program, captureStream()) }
+    }
+    publishStream(mixRef.current.stream)
+  }, [broadcastStatus, publishStream, program, captureStream])
+
   const toggleScreen = useCallback(() => {
     if (capture.status === 'live') capture.stop()
     else void capture.start()
@@ -78,22 +101,9 @@ export default function App() {
   const [color, setColor] = useState<string>(DEFAULT_COLOR)
   const width = DEFAULT_WIDTH
 
-  // QR code for the cameraman link so a phone can scan the dialog and join the
-  // broadcast without typing a long magic link.
-  const [qr, setQr] = useState<string | null>(null)
-  useEffect(() => {
-    if (!camera.link) {
-      setQr(null)
-      return
-    }
-    let cancelled = false
-    qrOf(camera.link).then((dataUrl) => {
-      if (!cancelled) setQr(dataUrl)
-    })
-    return () => {
-      cancelled = true
-    }
-  }, [camera.link])
+  // QR codes for the cameraman and viewer links, so a phone can scan the
+  // dialog and join without typing a long magic link.
+  const qr = useQrCode(camera.link)
 
   // The host-owned stroke stack. `past` holds the committed strokes (most-recent)
   // and `_future` holds strokes undone so the host can redo them with Shift+Z.
@@ -231,6 +241,8 @@ export default function App() {
             onSelect={setSelectedId}
             audio={audio}
             replay={replay}
+            broadcast={broadcast}
+            canBroadcast={program !== null}
           />
         </main>
       </div>

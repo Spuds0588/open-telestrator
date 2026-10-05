@@ -203,8 +203,8 @@ export default function CameramanApp() {
         >
           <video
             ref={videoRef}
-            className="camera__video"
-            style={zoom > 1 ? { '--zoom': zoom.toString() } as CSSProperties : undefined}
+            className={"camera__video" + (zoom > 1 ? ' camera__video--zoomed' : '')}
+            style={zoom > 1 ? ({ '--zoom': zoom.toString() } as CSSProperties) : undefined}
             muted
             playsInline
           />
