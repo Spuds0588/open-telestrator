@@ -12,12 +12,13 @@ Browser PWA MVP — **capture, telestration, instant replay, stage audio, and a
 magic-link cameraman feed**.
 The stage takes three kinds of input: a shared screen, the host's own webcam and
 any cameraman feeds; the **Device** row in the sidebar starts the screen, camera
-or mic, and the **Feed** row switches which source is on the program. A canvas
-overlay draws on top with a **Draw / Control** toggle so pointer events either
-annotate or reach the video, and a rolling buffer replays the last several
-seconds at 0.5×. The stage mixes the announcer mic and the captured tab's audio,
-each on its own volume and mute with a live level meter. A host can mint a link
-that turns someone's phone into an extra camera source (see below).
+or mic, and the **Feed** list switches which source is on the program. A canvas
+overlay draws straight on top of the video, and a rolling buffer replays the last
+several seconds at 0.5×. The stage mixes the announcer mic and the captured tab's
+audio, each on its own volume and mute with a live level meter. A host can mint a
+link that turns someone's phone into an extra camera source (see below).
+Everything lives in one compact sidebar on the right, and keyboard shortcuts are
+shown as badges on the controls they belong to.
 Shared-drawing collaboration is not built yet.
 
 ## Cameraman magic link
@@ -56,11 +57,10 @@ npm run build      # typecheck + production build (also emits the service worker
 npm run preview    # serve the production build
 ```
 
-Open the app, click **Share a tab**, pick a browser tab, then draw. Use
-**Control** to let clicks pass through to the video and **Draw** to annotate.
-Use the **Device** row to add the host camera or the announcer mic, and the
-**Feed** row to switch the program source. Use **🎥 Invite a cameraman** to add
-a phone camera as another source.
+Open the app, click **Share a tab**, pick a browser tab, then draw. Use the
+**Device** row to add the host camera or the announcer mic, and the **Feed**
+list to switch the program source. Use **🎥 Invite a cameraman** to add a phone
+camera as another source.
 
 ## Hosting
 

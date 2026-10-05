@@ -10,12 +10,11 @@ import {
   COLORS,
   DEFAULT_COLOR,
   DEFAULT_TOOL,
-  type DrawMode,
+  DEFAULT_WIDTH,
   type Stroke,
   type Tool,
 } from './lib/telestration'
-import { DrawingSidebar } from './components/DrawingSidebar'
-import { VideoFeeds } from './components/VideoFeeds'
+import { Sidebar } from './components/Sidebar'
 import { VideoStage } from './components/VideoStage'
 
 /** Narrow, stable colour handles so the document keydown handler can hand a
@@ -31,14 +30,6 @@ function nextColor(current: string): string {
 function prevColor(current: string): string {
   const index = COLORS.indexOf(current as Color)
   return COLORS[(index - 1 + COLORS.length) % COLORS.length] as string
-}
-
-function nextWidth(current: number): number {
-  return current >= 16 ? 16 : current + 1
-}
-
-function prevWidth(current: number): number {
-  return current <= 2 ? 2 : current - 1
 }
 
 /** Map a capture lifecycle onto the sidebar's coarse input phase. */
@@ -119,11 +110,11 @@ export default function App() {
   }
   const deviceStatus = inputStatusText(inputKind, devicePhase[inputKind])
 
-  // Drawing state owned by the host (see DrawingSidebar / TelestrationOverlay).
-  const [mode, setMode] = useState<DrawMode>('draw')
+  // Drawing state owned by the host (see Sidebar / TelestrationOverlay). The
+  // stroke width is fixed in the web MVP; a settings panel can expose it later.
   const [tool, setTool] = useState<Tool>(DEFAULT_TOOL)
   const [color, setColor] = useState<string>(DEFAULT_COLOR)
-  const [width, setWidth] = useState(4)
+  const width = DEFAULT_WIDTH
 
   // QR code for the cameraman link so a phone can scan this page and join the
   // broadcast without typing a long magic link.
@@ -212,17 +203,6 @@ export default function App() {
           event.preventDefault()
           setColor(prevColor(color))
           break
-        // Width
-        case 'w':
-        case 'W':
-          event.preventDefault()
-          setWidth(prevWidth(width))
-          break
-        case 'e':
-        case 'E':
-          event.preventDefault()
-          setWidth(nextWidth(width))
-          break
         // Undo / redo / clear
         case 'z':
         case 'Z':
@@ -242,7 +222,7 @@ export default function App() {
           break
       }
     },
-    [handleRedo, handleUndo, handleClear, color, width],
+    [handleRedo, handleUndo, handleClear, color],
   )
 
   useEffect(() => {
@@ -291,23 +271,26 @@ export default function App() {
       </header>
 
       <main className="stage">
-        {/* The drawing tools live in the left sidebar, beside the video. */}
-        <DrawingSidebar
-          mode={mode}
-          setMode={setMode}
+        {/* The canvas sits inside the stage; its strokes are owned by App. */}
+        <VideoStage
+          stream={selected?.stream ?? null}
+          past={past}
+          tool={tool}
+          color={color}
+          width={width}
+          audio={audio}
+          onStrokeCommitted={commitStroke}
+        />
+
+        {/* Tools, inputs and cameraman pairing in one compact column. */}
+        <Sidebar
           tool={tool}
           setTool={setTool}
           color={color}
           setColor={setColor}
-          width={width}
-          setWidth={setWidth}
           canUndo={canUndo}
           onUndo={handleUndo}
           onClear={handleClear}
-        />
-
-        {/* Input feeds + device picker + cameraman pairing. */}
-        <VideoFeeds
           sources={sources}
           selectedId={selectedId}
           onSelect={setSelectedId}
@@ -317,25 +300,7 @@ export default function App() {
           onSelectKind={selectDevice}
           deviceStatus={deviceStatus}
         />
-
-        {/* The canvas sits inside the stage; its strokes are owned by App. */}
-        <VideoStage
-          stream={selected?.stream ?? null}
-          past={past}
-          tool={tool}
-          color={color}
-          width={width}
-          mode={mode}
-          audio={audio}
-          onStrokeCommitted={commitStroke}
-        />
       </main>
-
-      <p className="hint">
-        Share a browser tab, start the camera or mic from <strong>Inputs</strong>, then draw over
-        the program. Use <strong>Draw</strong> to annotate and <strong>Control</strong> to let
-        clicks reach the video. Invite a cameraman to add a phone camera as another source.
-      </p>
     </div>
   )
 }

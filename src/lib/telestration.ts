@@ -10,9 +10,6 @@ be serialized and replayed on remote canvases later.
 // cases where a precise shape was wanted without the UI clutter.
 export type Tool = 'pen' | 'highlight' | 'rect' | 'ellipse'
 
-/** Whether pointer events draw on the canvas or pass through to the video. */
-export type DrawMode = 'draw' | 'control'
-
 /** A single, ordered gesture - a stroke, a rectangle or a highlight region. */
 export interface Gesture {
   tool: Tool
@@ -50,6 +47,9 @@ export const DEFAULT_TOOL: Tool = 'pen'
 
 /** The default colour for new strokes. */
 export const DEFAULT_COLOR = '#ef4444'
+
+/** Stroke width, in CSS pixels. Fixed in the web MVP (settings can expose it). */
+export const DEFAULT_WIDTH = 4
 
 /** The colour palette offered in the sidebar. */
 export const COLORS = ['#ef4444', '#f59e0b', '#22c55e', '#3b82f6', '#a855f7', '#ffffff'] as const

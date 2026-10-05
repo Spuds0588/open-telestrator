@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef } from 'react'
 import {
   clamp01,
   renderStrokes,
-  type DrawMode,
   type Gesture,
   type Point,
   type Tool,
@@ -26,7 +25,6 @@ export function TelestrationOverlay({
   tool,
   color,
   width,
-  mode,
   onStrokeCommitted,
 }: {
   /** Committed, replayable strokes, owned by the host (App). */
@@ -37,8 +35,6 @@ export function TelestrationOverlay({
   color: string
   /** The active stroke width (used while a gesture is in progress). */
   width: number
-  /** Draw: the canvas takes pointer events. Control: they pass through. */
-  mode: DrawMode
   /** Called once per completed gesture with the gesture to commit. */
   onStrokeCommitted: (gesture: Gesture & { id: string }) => void
 }) {
@@ -132,7 +128,7 @@ export function TelestrationOverlay({
     <div className="overlay">
       <canvas
         ref={canvasRef}
-        className={`overlay__canvas ${mode === 'draw' ? 'overlay__canvas--active' : ''}`}
+        className="overlay__canvas"
         data-testid="telestration-canvas"
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}

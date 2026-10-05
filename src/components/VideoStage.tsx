@@ -4,7 +4,7 @@ import { ReplayControls } from './ReplayControls'
 import { AudioControls } from './AudioControls'
 import { REPLAY_RATE, useReplay } from '../lib/useReplay'
 import type { AudioController } from '../lib/useAudioMixer'
-import { type Stroke, type Tool, type Gesture, type DrawMode } from '../lib/telestration'
+import { type Stroke, type Tool, type Gesture } from '../lib/telestration'
 
 /** The 16:9 stage: the captured video (or a replay of it) with the telestration
  * canvas layered on top and the replay/audio controls in the corner. */
@@ -14,7 +14,6 @@ export function VideoStage({
   tool,
   color,
   width,
-  mode,
   audio,
   onStrokeCommitted,
 }: {
@@ -28,8 +27,6 @@ export function VideoStage({
   color: string
   /** The active stroke width. */
   width: number
-  /** Whether the pointer draws on the canvas or passes through to the video. */
-  mode: DrawMode
   /** Stage audio controls, owned by App so the input picker can use them. */
   audio: AudioController
   /** Called once per completed gesture with the gesture to commit. */
@@ -83,7 +80,6 @@ export function VideoStage({
         tool={tool}
         color={color}
         width={width}
-        mode={mode}
         onStrokeCommitted={onStrokeCommitted}
       />
       <ReplayControls {...replay} />
