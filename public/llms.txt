@@ -1,0 +1,18 @@
+# Open Telestrator
+
+> Free, open-source sports telestrator and live commentary studio that runs entirely in a web browser. Draw over any sport as it happens, commentate, and send viewers one link — no account, no capture card and no cost.
+
+Open Telestrator is a static web app (React, WebRTC and PeerJS) hosted on GitHub Pages. The host shares a browser tab or a camera as the video source, draws over it with arrows, circles and freehand strokes, records instant replays, mixes commentary audio, and broadcasts the program to viewers peer-to-peer. Viewers — and phones acting as extra camera angles — join by opening a link or scanning a QR code, and the player can be embedded in another site with a plain iframe.
+
+- Home page: https://spuds0588.github.io/open-telestrator/
+- Studio app: https://spuds0588.github.io/open-telestrator/app.html
+- Source code and MIT licence: https://github.com/Spuds0588/open-telestrator
+
+## Key facts
+
+- Cost: free and open source (MIT); no account, subscription or paid tier.
+- Equipment: any webcam, phone camera or browser tab; no capture card or mixer needed.
+- Sports: any — the video source is whatever plays in a browser tab or comes from a camera.
+- Broadcast: live-only, peer-to-peer over WebRTC. Viewers form a relay tree, so the stream never passes through a server and the host's uplink stays small.
+- Viewing: any modern browser, phone or desktop, with play/pause, volume, full screen and picture-in-picture; share by link or embed in an iframe.
+- Studio entries: the landing page lives at `/`; the host studio, `?watch=` viewer and `?camera=` cameraman entries live at `/app.html`.

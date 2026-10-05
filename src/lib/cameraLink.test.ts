@@ -23,15 +23,16 @@ describe('buildCameraLink / parseCameraLink', () => {
     const url = new URL(link)
     expect(url.searchParams.get('camera')).toBe('host-1')
     expect(url.searchParams.get('t')).toBe('abc123')
+    expect(url.pathname).toBe('/app.html')
     expect(parseCameraLink(link)).toEqual({ hostId: 'host-1', token: 'abc123' })
   })
 
-  it('stays inside the app sub-path on GitHub Pages and replaces a stale session', () => {
+  it('stays on the studio page inside the app sub-path and replaces a stale session', () => {
     const link = buildCameraLink(
-      'https://spuds0588.github.io/open-telestrator/?camera=stale&t=stale',
+      'https://spuds0588.github.io/open-telestrator/app.html?camera=stale&t=stale',
       { hostId: 'p', token: 'q' },
     )
-    expect(link.startsWith('https://spuds0588.github.io/open-telestrator/?')).toBe(true)
+    expect(link.startsWith('https://spuds0588.github.io/open-telestrator/app.html?')).toBe(true)
     expect(parseCameraLink(link)).toEqual({ hostId: 'p', token: 'q' })
   })
 

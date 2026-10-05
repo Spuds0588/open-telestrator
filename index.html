@@ -1,15 +1,298 @@
 <!doctype html>
-<html lang="en">
+<html lang="en-GB">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#0b0f14" />
-    <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <title>Open Telestrator</title>
+    <title>Open Telestrator — free live sports commentary &amp; telestration</title>
+    <meta
+      name="description"
+      content="Comment on any sport for free. Draw over live video, talk over the action and send viewers one link — no account, no expensive kit, no cost. Runs in your browser."
+    />
+    <link rel="canonical" href="https://spuds0588.github.io/open-telestrator/" />
+    <meta name="robots" content="index, follow" />
+    <link rel="icon" type="image/png" href="/icons/pwa-192x192.png" />
+    <link rel="apple-touch-icon" href="/icons/pwa-192x192.png" />
+
+    <!-- Open Graph and Twitter cards: the same pitch, ready for a link preview. -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Open Telestrator" />
+    <meta
+      property="og:title"
+      content="Open Telestrator — free live sports commentary &amp; telestration"
+    />
+    <meta
+      property="og:description"
+      content="Turn the camera and browser you already have into a live telestrator: draw over any sport, commentate, and send viewers one link. No account, no kit, no cost."
+    />
+    <meta property="og:url" content="https://spuds0588.github.io/open-telestrator/" />
+    <meta property="og:image" content="https://spuds0588.github.io/open-telestrator/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta
+      property="og:image:alt"
+      content="Open Telestrator landing page: share and comment on any sport, free in your browser."
+    />
+    <meta property="og:locale" content="en_GB" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta
+      name="twitter:title"
+      content="Open Telestrator — free live sports commentary &amp; telestration"
+    />
+    <meta
+      name="twitter:description"
+      content="Draw over any sport, commentate, and send viewers one link. No account, no expensive kit, no cost — it runs in your browser."
+    />
+    <meta name="twitter:image" content="https://spuds0588.github.io/open-telestrator/og-image.png" />
+
+    <link rel="stylesheet" href="/src/home.css" />
+
+    <!-- Structured data for search engines and answer engines alike. The FAQ
+         text below matches the visible questions word for word. -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "WebSite",
+            "@id": "https://spuds0588.github.io/open-telestrator/#website",
+            "url": "https://spuds0588.github.io/open-telestrator/",
+            "name": "Open Telestrator",
+            "description": "Free, open-source telestration and live commentary for any sport, in the browser.",
+            "inLanguage": "en-GB"
+          },
+          {
+            "@type": "WebApplication",
+            "@id": "https://spuds0588.github.io/open-telestrator/#app",
+            "name": "Open Telestrator",
+            "url": "https://spuds0588.github.io/open-telestrator/",
+            "applicationCategory": "MultimediaApplication",
+            "operatingSystem": "Any (modern web browser)",
+            "browserRequirements": "Requires a browser with WebRTC and MediaRecorder support",
+            "description": "Free, open-source sports telestrator and peer-to-peer broadcasting studio. Draw over live video, commentate, and share one viewer link — no account, no equipment and no cost.",
+            "isAccessibleForFree": true,
+            "offers": { "@type": "Offer", "price": "0" },
+            "license": "https://opensource.org/license/mit",
+            "sameAs": ["https://github.com/Spuds0588/open-telestrator"],
+            "featureList": [
+              "Telestration: arrows, circles and freehand drawing over live video",
+              "Instant replay of the last seconds at reduced speed",
+              "Live commentary with microphone and tab-audio mixing",
+              "Peer-to-peer viewer broadcast — one link, a tree of viewers",
+              "Phones as extra camera angles via QR code",
+              "Iframe embed for watching inside another site",
+              "Free and open source, no account required"
+            ]
+          },
+          {
+            "@type": "FAQPage",
+            "@id": "https://spuds0588.github.io/open-telestrator/#faq",
+            "mainEntity": [
+              {
+                "@type": "Question",
+                "name": "Is Open Telestrator really free?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "Yes. It is free and open source (MIT), with no account, no subscription and no paid tier. Broadcasting is peer-to-peer over WebRTC, so there are no video minutes to buy and nothing to meter."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "What equipment do I need?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "A computer with a modern browser and any camera you already own — a webcam is plenty. You can also commentate over a stream already playing in another browser tab, and phones join as extra camera angles by scanning a QR code. No capture card, mixer or studio is required."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "Which sports can I telestrate?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "Any of them. The video source is a camera or a browser tab, so it suits football, basketball, cricket, motorsport, grassroots streams and analysis nights alike. Draw over live play, or over a replay to show the same moment twice."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "How do viewers watch the broadcast?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "Send them the viewer link or put the QR code on screen. Viewers open it in any browser — phone, tablet or desktop — and watch live with play/pause, volume, full screen and picture-in-picture. One iframe embeds the same player in your own site."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "Do I need an account or an install?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "No account, and nothing must be installed. Open the studio in a browser and you are live in minutes. If you want it on a home screen or desktop, Open Telestrator also installs as a PWA."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "Is the code open source?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "Yes — the source is on GitHub under the MIT licence, and the whole studio builds to static files you can host anywhere, including GitHub Pages."
+                }
+              }
+            ]
+          }
+        ]
+      }
+    </script>
   </head>
   <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
+    <a class="skip" href="#main">Skip to content</a>
+
+    <header class="top">
+      <a class="brand" href="./">
+        <span class="brand__dot" aria-hidden="true"></span>
+        <span class="brand__name">Open Telestrator</span>
+      </a>
+      <a class="btn btn--ghost" href="./app.html">Open the studio</a>
+    </header>
+
+    <main id="main">
+      <section class="hero">
+        <h1>Share and comment on any sport — free, in your browser</h1>
+        <p class="hero__lead">
+          Open Telestrator is a free, open-source telestrator and live commentary studio
+          that runs entirely in your browser. Draw over any sport as it happens,
+          commentate over the top, and send viewers one link — no account, no capture
+          card, no cost.
+        </p>
+        <p class="hero__cta">
+          <a class="btn" href="./app.html">Open the studio</a>
+          <a class="btn btn--ghost" href="https://github.com/Spuds0588/open-telestrator"
+            >View source on GitHub</a
+          >
+        </p>
+        <p class="hero__facts">No account · No ads · No tracking · Nothing to install</p>
+      </section>
+
+      <section class="section" aria-labelledby="why">
+        <h2 id="why">A full commentary setup, without the setup</h2>
+        <ul class="cards">
+          <li>
+            <h3>Any sport, any source</h3>
+            <p>
+              Go live over a match already playing in a browser tab, your webcam, or a
+              phone that scans a QR code and becomes a second angle.
+            </p>
+          </li>
+          <li>
+            <h3>Commentary that points</h3>
+            <p>
+              Arrows, circles and freehand drawing land straight on the picture, and
+              instant replay lets you show the same moment twice.
+            </p>
+          </li>
+          <li>
+            <h3>One link to watch</h3>
+            <p>
+              Viewers open a link and are watching straight away on any device. The
+              stream fans out peer-to-peer, so a bigger crowd never costs a bigger
+              uplink.
+            </p>
+          </li>
+          <li>
+            <h3>No cost, no kit, no account</h3>
+            <p>
+              A webcam and a browser are enough. Open source, static-hosted and free
+              forever — nothing to buy and nothing to sign up for.
+            </p>
+          </li>
+        </ul>
+      </section>
+
+      <section class="section" aria-labelledby="how">
+        <h2 id="how">From kick-off to viewers in three steps</h2>
+        <ol class="steps">
+          <li>
+            <strong>Pick a source.</strong> Share a browser tab that is already playing
+            the action, or switch on your webcam.
+          </li>
+          <li>
+            <strong>Commentate and draw.</strong> Talk over the play and mark up the
+            moment as it happens; instant replay brings it straight back.
+          </li>
+          <li>
+            <strong>Share the link.</strong> Send viewers the link or QR code, or embed
+            the player on your own page.
+          </li>
+        </ol>
+      </section>
+
+      <section class="section faq" aria-labelledby="faq">
+        <h2 id="faq">Questions, answered</h2>
+        <h3>Is Open Telestrator really free?</h3>
+        <p>
+          Yes. It is free and open source (MIT), with no account, no subscription and no
+          paid tier. Broadcasting is peer-to-peer over WebRTC, so there are no video
+          minutes to buy and nothing to meter.
+        </p>
+        <h3>What equipment do I need?</h3>
+        <p>
+          A computer with a modern browser and any camera you already own — a webcam is
+          plenty. You can also commentate over a stream already playing in another
+          browser tab, and phones join as extra camera angles by scanning a QR code. No
+          capture card, mixer or studio is required.
+        </p>
+        <h3>Which sports can I telestrate?</h3>
+        <p>
+          Any of them. The video source is a camera or a browser tab, so it suits
+          football, basketball, cricket, motorsport, grassroots streams and analysis
+          nights alike. Draw over live play, or over a replay to show the same moment
+          twice.
+        </p>
+        <h3>How do viewers watch the broadcast?</h3>
+        <p>
+          Send them the viewer link or put the QR code on screen. Viewers open it in any
+          browser — phone, tablet or desktop — and watch live with play/pause, volume,
+          full screen and picture-in-picture. One iframe embeds the same player in your
+          own site.
+        </p>
+        <h3>Do I need an account or an install?</h3>
+        <p>
+          No account, and nothing must be installed. Open the studio in a browser and you
+          are live in minutes. If you want it on a home screen or desktop, Open
+          Telestrator also installs as a PWA.
+        </p>
+        <h3>Is the code open source?</h3>
+        <p>
+          Yes — the source is on GitHub under the MIT licence, and the whole studio
+          builds to static files you can host anywhere, including GitHub Pages.
+        </p>
+      </section>
+
+      <section class="section final">
+        <h2>Your commentary, one link away</h2>
+        <p>
+          A webcam is a studio. A phone is a second camera. Everything else is already in
+          your browser.
+        </p>
+        <a class="btn" href="./app.html">Open the studio — it's free</a>
+      </section>
+    </main>
+
+    <footer class="foot">
+      <p>
+        Open Telestrator is free &amp; open-source software (MIT). Built with React,
+        WebRTC and PeerJS. ·
+        <a href="https://github.com/Spuds0588/open-telestrator">GitHub</a>
+      </p>
+    </footer>
+
+    <script>
+      // Register the studio's service worker so the site stays installable (and
+      // the shell launchable offline) from the landing page too. Development
+      // builds have no sw.js, hence the catch.
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', function () {
+          navigator.serviceWorker.register('sw.js').catch(function () {})
+        })
+      }
+    </script>
   </body>
 </html>

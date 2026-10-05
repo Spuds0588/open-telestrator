@@ -1,0 +1,240 @@
+/*
+ * The landing page's own styles, deliberately separate from the studio's
+ * src/index.css so a visitor who only reads the front page never downloads the
+ * app's stylesheet. The palette mirrors the app's :root block — keep the two in
+ * step when the studio's colours change.
+ */
+:root {
+  --bg: #0b0f14;
+  --panel: #141b24;
+  --line: #26313d;
+  --text: #e6edf3;
+  --muted: #8b98a5;
+  --accent: #ef4444;
+  --accent-soft: rgba(239, 68, 68, 0.16);
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 16px/1.6 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: var(--text);
+}
+
+a:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.skip {
+  position: absolute;
+  left: -9999px;
+}
+
+.skip:focus {
+  left: 16px;
+  top: 12px;
+  z-index: 10;
+  padding: 8px 12px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  text-decoration: none;
+}
+
+.top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  max-width: 920px;
+  margin: 0 auto;
+  padding: 20px 24px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 600;
+  text-decoration: none;
+  letter-spacing: 0.01em;
+}
+
+.brand__dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 4px var(--accent-soft);
+}
+
+.btn {
+  display: inline-block;
+  border: 1px solid transparent;
+  background: var(--accent);
+  color: #fff;
+  font: inherit;
+  font-weight: 600;
+  padding: 10px 18px;
+  border-radius: 8px;
+  text-decoration: none;
+}
+
+.btn--ghost {
+  background: transparent;
+  border-color: var(--line);
+  color: var(--text);
+}
+
+main {
+  max-width: 920px;
+  margin: 0 auto;
+  padding: 8px 24px 56px;
+}
+
+.hero {
+  padding: 40px 0 8px;
+}
+
+.hero h1 {
+  margin: 0 0 18px;
+  font-size: clamp(30px, 5vw, 44px);
+  line-height: 1.15;
+  letter-spacing: -0.015em;
+}
+
+.hero__lead {
+  max-width: 46em;
+  margin: 0 0 22px;
+  font-size: 18px;
+}
+
+.hero__cta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 0 0 14px;
+}
+
+.hero__facts {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.section {
+  margin-top: 52px;
+}
+
+.section h2 {
+  margin: 0 0 18px;
+  font-size: 22px;
+  letter-spacing: -0.01em;
+}
+
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.cards li {
+  padding: 18px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+
+.cards h3 {
+  margin: 0 0 8px;
+  font-size: 16px;
+}
+
+.cards p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 15px;
+}
+
+.steps {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding-left: 20px;
+  max-width: 60em;
+}
+
+.steps li::marker {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.faq h3 {
+  margin: 24px 0 6px;
+  font-size: 17px;
+}
+
+.faq p {
+  max-width: 60em;
+  margin: 0;
+  color: var(--muted);
+}
+
+.final {
+  padding: 28px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  text-align: center;
+}
+
+.final h2 {
+  margin-bottom: 8px;
+}
+
+.final p {
+  margin: 0 auto 18px;
+  max-width: 42em;
+  color: var(--muted);
+}
+
+.foot {
+  max-width: 920px;
+  margin: 0 auto;
+  padding: 0 24px 48px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+@media (max-width: 640px) {
+  .top {
+    padding: 14px 18px;
+  }
+
+  main {
+    padding: 0 18px 40px;
+  }
+
+  .hero {
+    padding-top: 22px;
+  }
+
+  .section {
+    margin-top: 40px;
+  }
+}

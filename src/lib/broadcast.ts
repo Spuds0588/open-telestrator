@@ -132,9 +132,13 @@ export interface ViewerSession {
   token: string
 }
 
-/** Build the viewer link from the host page's own URL (sub-path safe). */
+/**
+ * Build the viewer link from the host page's own URL (sub-path safe). The viewer
+ * entry lives on the studio page (`app.html`), never on the landing page that
+ * owns the base address.
+ */
 export function buildViewerLink(baseHref: string, session: ViewerSession): string {
-  const url = new URL('.', baseHref)
+  const url = new URL('app.html', baseHref)
   url.searchParams.set(WATCH_PARAM, session.hostId)
   url.searchParams.set('t', session.token)
   return url.toString()

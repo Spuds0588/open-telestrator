@@ -6,9 +6,9 @@ import { CAMERA_PARAM } from './lib/cameraLink'
 import { WATCH_PARAM } from './lib/broadcast'
 import './index.css'
 
-// A `?camera=` link is the cameraman entry and `?watch=` the viewer entry.
-// Both are code-split so a phone that only ever streams or watches never
-// downloads the host stage.
+// This bundle is the studio page (app.html). A `?camera=` link is the
+// cameraman entry and `?watch=` the viewer entry; both are code-split so a
+// phone that only ever streams or watches never downloads the host stage.
 const CameramanApp = lazy(() => import('./cameraman/CameramanApp'))
 const ViewerApp = lazy(() => import('./viewer/ViewerApp'))
 

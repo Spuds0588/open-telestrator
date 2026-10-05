@@ -57,12 +57,13 @@ export function createToken(): string {
 }
 
 /**
- * Build the cameraman link from the host page's own URL. Resolving against the
- * document's directory (not the origin root) keeps the link inside the app when
- * the front end is served from a sub-path, e.g. GitHub Pages /open-telestrator/.
+ * Build the cameraman link from the host page's own URL. The cameraman entry
+ * lives on the studio page (`app.html`), not the landing page at the directory
+ * root; resolving it against the host URL keeps the link inside the app when the
+ * front end is served from a sub-path, e.g. GitHub Pages /open-telestrator/.
  */
 export function buildCameraLink(baseHref: string, session: CameraSession): string {
-  const url = new URL('.', baseHref)
+  const url = new URL('app.html', baseHref)
   url.searchParams.set(CAMERA_PARAM, session.hostId)
   url.searchParams.set('t', session.token)
   return url.toString()

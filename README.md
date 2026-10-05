@@ -1,6 +1,6 @@
 # open-telestrator
 
-**[▶ Launch the web app →](https://Spuds0588.github.io/open-telestrator/)**
+**[▶ Launch the studio →](https://Spuds0588.github.io/open-telestrator/app.html)** · [landing page](https://Spuds0588.github.io/open-telestrator/)
 
 Runs entirely in the browser and installs as a PWA — no account, no download.
 
@@ -128,7 +128,7 @@ and the player controls, and nothing else.
 
 ```html
 <iframe
-  src="https://Spuds0588.github.io/open-telestrator/?watch=HOST_ID&t=TOKEN"
+  src="https://Spuds0588.github.io/open-telestrator/app.html?watch=HOST_ID&t=TOKEN"
   width="960"
   height="540"
   allow="autoplay; fullscreen; picture-in-picture"
@@ -142,6 +142,23 @@ forces the bare layout from anywhere and `embed=0` keeps the full viewer page
 even inside a frame. The app serves no frame headers of its own, so whether a
 page may be framed is entirely the embedding page's business.
 
+## Pages and addresses
+
+There are two pages, both produced by the multi-page Vite build:
+
+- **`/` — the landing page** (`index.html` with its own `src/home.css`): what the
+  project is, who it is for and why it is free, written for search engines and
+  answer engines. It ships no application JavaScript, only a service-worker
+  registration so the site stays installable from the front door. This is the
+  page meant to be indexed; `public/robots.txt`, `public/sitemap.xml` and
+  `public/llms.txt` all point at it.
+- **`/app.html` — the studio** (`src/main.tsx`). It serves all three entries: the
+  host studio plain, the cameraman on `?camera=…` and the viewer on `?watch=…`.
+  Its content is per-session, so it is `noindex`.
+
+Every viewer, cameraman and QR link the host mints points at `/app.html`
+(`buildViewerLink` / `buildCameraLink`), never at the landing page.
+
 ## Development
 
 ```bash
@@ -153,7 +170,8 @@ npm run build      # typecheck + production build (also emits the service worker
 npm run preview    # serve the production build
 ```
 
-Open the app, click **Share a tab**, pick a browser tab, then draw. Use the
+`npm run dev` serves the landing page at `/` and the studio at `/app.html`.
+Open the studio, click **Share a tab**, pick a browser tab, then draw. Use the
 **Input** stack to add the host camera or invite a cameraman; click any feed in
 the list to put it on the program. The **Audio** section enables and mixes the
 announcer mic, and **Replay** plays the last several seconds at 0.5×.
@@ -162,7 +180,8 @@ announcer mic, and **Replay** plays the last several seconds at 0.5×.
 
 The app is a static front end, so it deploys straight to GitHub Pages. The
 [`deploy-pages`](.github/workflows/deploy-pages.yml) workflow runs the unit tests,
-builds `dist/` and publishes it on every push to `main`. The repo's **Settings → Pages** source must
+builds `dist/` — the landing page and the studio, together with the PWA,
+robots, sitemap and `llms.txt` files — and publishes it on every push to `main`. The repo's **Settings → Pages** source must
 be set to **GitHub Actions** once; the site then lives at
 <https://Spuds0588.github.io/open-telestrator/>. Because a project site is served
 under `/<repo>/`, the workflow sets `VITE_BASE_PATH` to match (local dev stays at

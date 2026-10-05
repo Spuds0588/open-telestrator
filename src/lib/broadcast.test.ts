@@ -35,14 +35,15 @@ describe('viewer links', () => {
     const link = buildViewerLink('http://localhost:5173/', { hostId: 'host-9', token: 'abc123' })
     expect(parseViewerLink(link)).toEqual({ hostId: 'host-9', token: 'abc123' })
     expect(new URL(link).searchParams.get('watch')).toBe('host-9')
+    expect(new URL(link).pathname).toBe('/app.html')
   })
 
-  it('stays inside the app sub-path and replaces a stale session', () => {
+  it('stays on the studio page inside the app sub-path and replaces a stale session', () => {
     const link = buildViewerLink(
-      'https://spuds0588.github.io/open-telestrator/?watch=stale&t=stale',
+      'https://spuds0588.github.io/open-telestrator/app.html?watch=stale&t=stale',
       { hostId: 'p', token: 'q' },
     )
-    expect(link.startsWith('https://spuds0588.github.io/open-telestrator/?')).toBe(true)
+    expect(link.startsWith('https://spuds0588.github.io/open-telestrator/app.html?')).toBe(true)
     expect(parseViewerLink(link)).toEqual({ hostId: 'p', token: 'q' })
   })
 
@@ -54,7 +55,7 @@ describe('viewer links', () => {
 })
 
 describe('wantsEmbed', () => {
-  const link = 'https://spuds0588.github.io/open-telestrator/?watch=h&t=k'
+  const link = 'https://spuds0588.github.io/open-telestrator/app.html?watch=h&t=k'
 
   it('lets the link answer outright either way', () => {
     const ask = (value: string, framed = false, referrer = 'https://portal.test/') =>

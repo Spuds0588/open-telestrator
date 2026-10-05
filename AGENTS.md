@@ -52,7 +52,7 @@ found it, and say in your summary what you cleaned.
 
 ```bash
 npm run dev        # dev server (http://localhost:5173)
-npm test           # Vitest, run once (57 tests)
+npm test           # Vitest, run once (81 tests)
 npm run typecheck  # tsc --noEmit
 npm run build      # typecheck + production build (also emits the service worker)
 npm run preview    # serve the production build
@@ -80,7 +80,15 @@ runs the tests before building, so a failing test blocks the deploy to prod.
   rules you orphan instead of leaving them.
 - **The web app is desktop-only.** Phones and tablets get the unsupported notice
   pointing at GitHub releases. The cameraman (`?camera=`) and viewer (`?watch=`)
-  entries are code-split in `src/main.tsx` and must keep working on phones.
+  entries live on the studio page (`app.html`) and are code-split in
+  `src/main.tsx`; they must keep working on phones.
+- **Two pages, one build.** `index.html` is the static landing page — its own
+  `src/home.css`, no app bundle, and copy written for search and answer engines.
+  `app.html` is the studio and serves every other entry; it is `noindex`. Every
+  link the app mints (viewer, cameraman, QR) resolves against `app.html`, never
+  the directory root. The landing page's visible FAQ and its JSON-LD are one
+  artefact: change them together, and keep `public/robots.txt`,
+  `public/sitemap.xml` and `public/llms.txt` on the real URLs.
 - **A viewer page in somebody else's page goes bare.** The viewer drops this
   app's chrome when it is framed or linked from another origin (`wantsEmbed` in
   `src/lib/broadcast.ts`), so an embed needs no URL parameter; the `embed`
