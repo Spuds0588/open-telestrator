@@ -10,13 +10,15 @@ Free & open-source sports telestrator & P2P broadcasting studio. Draw over any l
 
 Browser PWA MVP — **capture, telestration, instant replay, stage audio, and a
 magic-link cameraman feed**.
-Screen capture binds a tab to a `<video>`, a canvas overlay draws on top with
-pointer events that toggle between drawing and letting clicks reach the video,
-and a rolling buffer replays the last several seconds at 0.5×. The stage mixes
-the announcer mic and the captured tab's audio, each on its own volume and mute
-with a live level meter. A host can mint a link that turns someone's phone into
-an extra camera source (see below). Shared-drawing collaboration is not built
-yet.
+The stage takes three kinds of input: a shared screen, the host's own webcam and
+any cameraman feeds; the **Device** row in the sidebar starts the screen, camera
+or mic, and the **Feed** row switches which source is on the program. A canvas
+overlay draws on top with a **Draw / Control** toggle so pointer events either
+annotate or reach the video, and a rolling buffer replays the last several
+seconds at 0.5×. The stage mixes the announcer mic and the captured tab's audio,
+each on its own volume and mute with a live level meter. A host can mint a link
+that turns someone's phone into an extra camera source (see below).
+Shared-drawing collaboration is not built yet.
 
 ## Cameraman magic link
 
@@ -48,6 +50,7 @@ VITE_ICE_SERVERS='[{"urls":"stun:stun.example.com:3478"},{"urls":"turn:turn.exam
 ```bash
 npm install
 npm run dev        # dev server (http://localhost:5173)
+npm test           # unit tests (Vitest)
 npm run typecheck  # tsc --noEmit
 npm run build      # typecheck + production build (also emits the service worker)
 npm run preview    # serve the production build
@@ -55,13 +58,15 @@ npm run preview    # serve the production build
 
 Open the app, click **Share a tab**, pick a browser tab, then draw. Use
 **Control** to let clicks pass through to the video and **Draw** to annotate.
-Use **🎥 Invite a cameraman** to add a phone camera as another source.
+Use the **Device** row to add the host camera or the announcer mic, and the
+**Feed** row to switch the program source. Use **🎥 Invite a cameraman** to add
+a phone camera as another source.
 
 ## Hosting
 
 The app is a static front end, so it deploys straight to GitHub Pages. The
-[`deploy-pages`](.github/workflows/deploy-pages.yml) workflow builds `dist/` and
-publishes it on every push to `main`. The repo's **Settings → Pages** source must
+[`deploy-pages`](.github/workflows/deploy-pages.yml) workflow runs the unit tests,
+builds `dist/` and publishes it on every push to `main`. The repo's **Settings → Pages** source must
 be set to **GitHub Actions** once; the site then lives at
 <https://Spuds0588.github.io/open-telestrator/>. Because a project site is served
 under `/<repo>/`, the workflow sets `VITE_BASE_PATH` to match (local dev stays at

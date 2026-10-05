@@ -24,6 +24,8 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
+      - name: Test
+        run: npm test
       - name: Build
         # Must match the repository name so asset URLs resolve under /<repo>/.
         env:
