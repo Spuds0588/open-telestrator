@@ -2,8 +2,20 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 import Peer, { type DataConnection, type MediaConnection } from 'peerjs'
 import { parseCameraLink, parseCameraReport, type CameraSession } from '../lib/cameraLink'
+import { applyCollabOp, drawOp, parseCollabOp, type CollabOp } from '../lib/collab'
 import { classifyCameraError } from '../lib/mediaErrors'
 import { peerOptions } from '../lib/peerConfig'
+import { TelestrationOverlay } from '../components/TelestrationOverlay'
+import {
+  ALL_TOOLS,
+  COLORS,
+  DEFAULT_COLOR,
+  DEFAULT_TOOL,
+  DEFAULT_WIDTH,
+  toolGlyph,
+  type Stroke,
+  type Tool,
+} from '../lib/telestration'
 
 type CameramanStatus =
   | 'ready'
@@ -28,12 +40,14 @@ const CAMERA_CONSTRAINTS: MediaStreamConstraints = {
 const ACCEPT_TIMEOUT_MS = 12000
 
 /**
- * The lightweight cameraman page.
+ * The lightweight co-host page — the cameraman page, and the shared canvas.
  *
- * It opens the phone's camera, connects to the host peer from the magic link,
- * and makes a single one-way media call. Only the camera is sent — the host
- * answers without a stream — so this view is deliberately tiny: preview,
- * status, one button.
+ * It connects to the host peer from the magic link. Sharing the phone's camera
+ * is optional: with it, a single one-way media call sends only the camera and
+ * the host answers with no stream. Either way the host calls back with the
+ * program picture and both directions trade drawing operations over the same
+ * token-checked data channel, so a second person can telestrate on the host's
+ * canvas without ever granting camera access.
  */
 export default function CameramanApp() {
   const [session] = useState<CameraSession | null>(() => parseCameraLink(window.location.href))
@@ -44,32 +58,58 @@ export default function CameramanApp() {
   const [preview, setPreview] = useState<MediaStream | null>(null)
   /** How many people are watching, as last reported by the host. */
   const [viewers, setViewers] = useState<number | null>(null)
+  /** The program picture the host sends so we have something to draw on. */
+  const [program, setProgram] = useState<MediaStream | null>(null)
+  /** Whether the drawing surface is open over the camera preview. */
+  const [drawing, setDrawing] = useState(false)
+
+  // Drawing state, mirroring the host's: the same stack, the same gestures.
+  const [tool, setTool] = useState<Tool>(DEFAULT_TOOL)
+  const [color, setColor] = useState<string>(DEFAULT_COLOR)
+  const width = DEFAULT_WIDTH
+  const [strokes, setStrokes] = useState<Stroke[]>([])
 
   const videoRef = useRef<HTMLVideoElement>(null)
+  const programVideoRef = useRef<HTMLVideoElement>(null)
   const peerRef = useRef<Peer | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
   const callRef = useRef<MediaConnection | null>(null)
-  const reportConnRef = useRef<DataConnection | null>(null)
+  /** The host's program call, answered with no stream in return. */
+  const programCallRef = useRef<MediaConnection | null>(null)
+  const channelRef = useRef<DataConnection | null>(null)
   const timerRef = useRef<number | null>(null)
+  /** Guards against a second join while the first is still connecting. */
+  const joiningRef = useRef(false)
 
   const teardown = useCallback(() => {
+    joiningRef.current = false
     if (timerRef.current !== null) {
       window.clearInterval(timerRef.current)
       timerRef.current = null
     }
     callRef.current?.close()
     callRef.current = null
-    reportConnRef.current?.close()
-    reportConnRef.current = null
+    programCallRef.current?.close()
+    programCallRef.current = null
+    channelRef.current?.close()
+    channelRef.current = null
     peerRef.current?.destroy()
     peerRef.current = null
     streamRef.current?.getTracks().forEach((track) => track.stop())
     streamRef.current = null
     setPreview(null)
     setViewers(null)
+    setProgram(null)
+    setStrokes([])
+    setDrawing(false)
   }, [])
 
   useEffect(() => () => teardown(), [teardown])
+
+  // The drawing surface only exists while the host is offering the program.
+  useEffect(() => {
+    if (!program) setDrawing(false)
+  }, [program])
 
   // Bind the local preview once the camera is open.
   useEffect(() => {
@@ -82,32 +122,96 @@ export default function CameramanApp() {
     }
   }, [preview])
 
-  const start = useCallback(async () => {
-    if (!session || streamRef.current) return
-    setStatus('requesting')
+  // Bind the program picture; `drawing` re-runs it when the element mounts.
+  useEffect(() => {
+    const video = programVideoRef.current
+    if (!video) return
+    video.srcObject = program
+    if (program) void video.play().catch(() => undefined)
+    return () => {
+      video.srcObject = null
+    }
+  }, [program, drawing])
+
+  /** Send a drawing operation to the host, which owns the stroke stack. */
+  const sendOp = useCallback((op: CollabOp) => {
+    const channel = channelRef.current
+    if (channel?.open) channel.send(op)
+  }, [])
+
+  const commitStroke = useCallback(
+    (stroke: Stroke) => {
+      setStrokes((prev) => applyCollabOp(prev, drawOp(stroke)))
+      sendOp(drawOp(stroke))
+    },
+    [sendOp],
+  )
+
+  const handleUndo = useCallback(() => {
+    if (strokes.length === 0) return
+    const last = strokes[strokes.length - 1]
+    setStrokes(strokes.slice(0, -1))
+    sendOp({ t: 'remove', id: last.id })
+  }, [strokes, sendOp])
+
+  const handleClear = useCallback(() => {
+    setStrokes([])
+    sendOp({ t: 'clear' })
+  }, [sendOp])
+
+  /**
+   * Join the host. With a camera the media call leads and the channel follows;
+   * without one the channel alone makes the connection, so a co-host who is
+   * only there to draw never has to grant camera permission.
+   */
+  const connect = useCallback(async (wantCamera: boolean) => {
+    if (!session || joiningRef.current || peerRef.current) return
+    joiningRef.current = true
     setNotice(null)
 
-    let media: MediaStream
-    try {
-      if (!navigator.mediaDevices?.getUserMedia) {
-        throw new DOMException('getUserMedia is unavailable', 'NotSupportedError')
+    let media: MediaStream | null = null
+    if (wantCamera) {
+      setStatus('requesting')
+      try {
+        if (!navigator.mediaDevices?.getUserMedia) {
+          throw new DOMException('getUserMedia is unavailable', 'NotSupportedError')
+        }
+        media = await navigator.mediaDevices.getUserMedia(CAMERA_CONSTRAINTS)
+      } catch (cause) {
+        const { status: next, notice: text } = classifyCameraError(cause)
+        setStatus(next)
+        setNotice(text)
+        joiningRef.current = false
+        return
       }
-      media = await navigator.mediaDevices.getUserMedia(CAMERA_CONSTRAINTS)
-    } catch (cause) {
-      const { status: next, notice: text } = classifyCameraError(cause)
-      setStatus(next)
-      setNotice(text)
-      return
+      streamRef.current = media
+      setPreview(media)
     }
 
-    streamRef.current = media
-    setPreview(media)
     setStatus('connecting')
 
     const peer = new Peer(peerOptions())
     peerRef.current = peer
 
+    // The host calls back with the program picture. Only the host we dialled may
+    // do so; answering sends no media the other way — the camera path stays
+    // one-way.
+    peer.on('call', (call) => {
+      if (call.peer !== session.hostId) {
+        call.close()
+        return
+      }
+      call.answer()
+      programCallRef.current = call
+      call.on('stream', (remote) => setProgram(remote))
+      call.on('close', () => {
+        setProgram(null)
+        if (programCallRef.current === call) programCallRef.current = null
+      })
+    })
+
     peer.on('error', (error) => {
+      joiningRef.current = false
       setStatus('error')
       setNotice(
         error.type === 'peer-unavailable'
@@ -119,23 +223,53 @@ export default function CameramanApp() {
     peer.on('open', () => {
       // One-way: we send our camera and expect no stream back. The token rides
       // in the call metadata; the host closes the call if it doesn't match.
-      const call = peer.call(session.hostId, media, { metadata: { token: session.token } })
+      const call = media
+        ? peer.call(session.hostId, media, { metadata: { token: session.token } })
+        : null
       callRef.current = call
 
-      // No media comes back, but a small data channel does: the host repeats the
-      // viewer count so we can show how many people are watching.
-      const report = peer.connect(session.hostId, {
+      // The data channel carries the viewer count down and drawing operations
+      // both ways: the host repeats the count so we can show how many people are
+      // watching, and echoes the shared strokes so both canvases agree.
+      const channel = peer.connect(session.hostId, {
         reliable: true,
         metadata: { token: session.token },
       })
-      reportConnRef.current = report
-      report.on('data', (raw) => {
-        const message = parseCameraReport(raw)
-        if (message) setViewers(message.count)
+      channelRef.current = channel
+      let opened = false
+      channel.on('open', () => {
+        opened = true
+        // With no camera call to wait on, the channel is the whole connection.
+        if (!call) setStatus('live')
       })
-      // No channel, no number: drop the badge rather than leave a count that
+      channel.on('data', (raw) => {
+        const report = parseCameraReport(raw)
+        if (report) {
+          setViewers(report.count)
+          return
+        }
+        const op = parseCollabOp(raw)
+        if (op) setStrokes((prev) => applyCollabOp(prev, op))
+      })
+      // No channel, no picture: drop the count rather than leave a number that
       // may no longer be true sitting next to a dead camera.
-      report.on('close', () => setViewers(null))
+      channel.on('close', () => {
+        setViewers(null)
+        if (channelRef.current !== channel) return
+        channelRef.current = null
+        // Closed before it ever opened: the host refused the token.
+        if (!opened) {
+          setStatus('rejected')
+          setNotice((prev) => prev ?? 'The host did not accept this invite. Ask for a fresh link.')
+        } else if (!call) {
+          setStatus('error')
+          setNotice('The host ended the co-host session.')
+        }
+      })
+
+      // No camera: the channel is the only connection, so there is nothing to
+      // watch for a negotiated media path.
+      if (!call) return
 
       call.on('close', () => {
         // The host rejected the token or hung up: no media was ever established.
@@ -213,7 +347,7 @@ export default function CameramanApp() {
       <header className="camera__topbar">
         <div className="brand">
           <span className="brand__dot" aria-hidden="true" />
-          <h1>Cameraman</h1>
+          <h1>Co-host</h1>
         </div>
         {viewers !== null && (
           <span className="camera__viewers" data-testid="camera-viewers">
@@ -224,91 +358,192 @@ export default function CameramanApp() {
       </header>
 
       <main className="camera__main">
-        <div
-          className={"camera__preview" + (fullscreen ? ' camera__preview--fullscreen' : '')}
-          data-testid="camera-preview"
-        >
-          <video
-            ref={videoRef}
-            className={"camera__video" + (zoom > 1 ? ' camera__video--zoomed' : '')}
-            style={zoom > 1 ? ({ '--zoom': zoom.toString() } as CSSProperties) : undefined}
-            muted
-            playsInline
-          />
-          {!preview && <div className="screen__empty">No camera</div>}
-        </div>
-
-        <p className="camera__status" data-testid="camera-status" data-state={status} role="status">
-          {status === 'ready' && 'Tap to start your camera and join the broadcast.'}
-          {status === 'requesting' && 'Waiting for camera permission…'}
-          {status === 'connecting' && 'Connecting to the host…'}
-          {status === 'live' && 'Live — your camera is streaming to the host.'}
-          {status === 'denied' && 'Camera permission was blocked.'}
-          {status === 'rejected' && 'The host did not accept this camera.'}
-          {status === 'error' && 'Something went wrong.'}
-        </p>
-        {notice && (
-          <p className="camera__notice" role="alert">
-            {notice}
-          </p>
-        )}
-
-        {/* Zoom + full-screen controls, shown on live camera. */}
-        {status === 'live' && (
-          <div className="camera__zoom-btns">
-            <button
-              type="button"
-              className="btn"
-              data-testid="camera-zoom-out"
-              onClick={zoomOut}
-              aria-label="Zoom out"
-            >
-              −
-            </button>
-            <button
-              type="button"
-              className="btn"
-              data-testid="camera-zoom-reset"
-              onClick={resetZoom}
-              aria-label="Reset zoom"
-            >
-              100%
-            </button>
-            <button
-              type="button"
-              className="btn"
-              data-testid="camera-zoom-in"
-              onClick={zoomIn}
-              aria-label="Zoom in"
-            >
-              +
-            </button>
-            <button
-              type="button"
-              className="btn btn--ghost"
-              data-testid="camera-fullscreen"
-              onClick={fullscreen ? exitFullscreen : enterFullscreen}
-              aria-label={fullscreen ? 'Exit full screen' : 'Enter full screen'}
-            >
-              {fullscreen ? '⛶ Exit' : '⛶ Full'}
-            </button>
+        {drawing && program ? (
+          /* The shared canvas: the program picture with the co-host's strokes. */
+          <div className="camera__draw" data-testid="camera-draw">
+            <div className="camera__draw-tools">
+              {ALL_TOOLS.map((entry) => (
+                <button
+                  key={entry}
+                  type="button"
+                  className={'btn btn--ghost' + (entry === tool ? ' is-active' : '')}
+                  data-testid={`camera-tool-${entry}`}
+                  aria-label={entry}
+                  aria-pressed={entry === tool}
+                  onClick={() => setTool(entry)}
+                >
+                  {toolGlyph(entry)}
+                </button>
+              ))}
+              <span className="camera__swatches">
+                {COLORS.map((swatch) => (
+                  <button
+                    key={swatch}
+                    type="button"
+                    className={'camera__swatch' + (swatch === color ? ' is-active' : '')}
+                    style={{ background: swatch } as CSSProperties}
+                    data-testid={`camera-colour-${swatch}`}
+                    aria-label={`Colour ${swatch}`}
+                    aria-pressed={swatch === color}
+                    onClick={() => setColor(swatch)}
+                  />
+                ))}
+              </span>
+              <button
+                type="button"
+                className="btn btn--ghost"
+                data-testid="camera-undo"
+                disabled={strokes.length === 0}
+                onClick={handleUndo}
+              >
+                Undo
+              </button>
+              <button
+                type="button"
+                className="btn btn--ghost"
+                data-testid="camera-clear"
+                disabled={strokes.length === 0}
+                onClick={handleClear}
+              >
+                Clear
+              </button>
+              <button
+                type="button"
+                className="btn"
+                data-testid="camera-draw-close"
+                onClick={() => setDrawing(false)}
+              >
+                Done
+              </button>
+            </div>
+            <div className="camera__preview" data-testid="camera-draw-preview">
+              <video ref={programVideoRef} className="camera__video" muted playsInline />
+              <TelestrationOverlay
+                strokes={strokes}
+                tool={tool}
+                color={color}
+                width={width}
+                onStrokeCommitted={commitStroke}
+              />
+            </div>
           </div>
-        )}
-
-        {status === 'ready' || status === 'rejected' || status === 'error' || status === 'denied' ? (
-          <button
-            type="button"
-            className="btn"
-            data-testid="camera-start"
-            disabled={!session}
-            onClick={() => void (status === 'ready' ? start() : retry())}
-          >
-            {status === 'ready' ? 'Start camera' : 'Try again'}
-          </button>
         ) : (
-          <button type="button" className="btn btn--ghost" data-testid="camera-stop" onClick={retry}>
-            Stop
-          </button>
+          <>
+            <div
+              className={"camera__preview" + (fullscreen ? ' camera__preview--fullscreen' : '')}
+              data-testid="camera-preview"
+            >
+              <video
+                ref={videoRef}
+                className={"camera__video" + (zoom > 1 ? ' camera__video--zoomed' : '')}
+                style={zoom > 1 ? ({ '--zoom': zoom.toString() } as CSSProperties) : undefined}
+                muted
+                playsInline
+              />
+              {!preview && <div className="screen__empty">No camera</div>}
+            </div>
+
+            <p className="camera__status" data-testid="camera-status" data-state={status} role="status">
+              {status === 'ready' && 'Tap to start your camera and join the broadcast.'}
+              {status === 'requesting' && 'Waiting for camera permission…'}
+              {status === 'connecting' && 'Connecting to the host…'}
+              {status === 'live' &&
+            (preview
+              ? 'Live — your camera is streaming to the host.'
+              : 'Connected — you can draw on the program.')}
+              {status === 'denied' && 'Camera permission was blocked.'}
+              {status === 'rejected' && 'The host did not accept this camera.'}
+              {status === 'error' && 'Something went wrong.'}
+            </p>
+            {notice && (
+              <p className="camera__notice" role="alert">
+                {notice}
+              </p>
+            )}
+
+            {/* Zoom + full-screen controls, shown on a live camera. */}
+            {status === 'live' && preview && (
+              <div className="camera__zoom-btns">
+                <button
+                  type="button"
+                  className="btn"
+                  data-testid="camera-zoom-out"
+                  onClick={zoomOut}
+                  aria-label="Zoom out"
+                >
+                  −
+                </button>
+                <button
+                  type="button"
+                  className="btn"
+                  data-testid="camera-zoom-reset"
+                  onClick={resetZoom}
+                  aria-label="Reset zoom"
+                >
+                  100%
+                </button>
+                <button
+                  type="button"
+                  className="btn"
+                  data-testid="camera-zoom-in"
+                  onClick={zoomIn}
+                  aria-label="Zoom in"
+                >
+                  +
+                </button>
+                <button
+                  type="button"
+                  className="btn btn--ghost"
+                  data-testid="camera-fullscreen"
+                  onClick={fullscreen ? exitFullscreen : enterFullscreen}
+                  aria-label={fullscreen ? 'Exit full screen' : 'Enter full screen'}
+                >
+                  {fullscreen ? '⛶ Exit' : '⛶ Full'}
+                </button>
+              </div>
+            )}
+
+            {/* Co-host controls: only once the host offers the program picture. */}
+            {status === 'live' && program && (
+              <button
+                type="button"
+                className="btn"
+                data-testid="camera-draw-open"
+                onClick={() => setDrawing(true)}
+              >
+                ✎ Draw on the program
+              </button>
+            )}
+
+            {status === 'ready' || status === 'rejected' || status === 'error' || status === 'denied' ? (
+              <div className="camera__zoom-btns">
+                <button
+                  type="button"
+                  className="btn"
+                  data-testid="camera-start"
+                  disabled={!session}
+                  onClick={() => void (status === 'ready' ? connect(true) : retry())}
+                >
+                  {status === 'ready' ? 'Start camera' : 'Try again'}
+                </button>
+                {status === 'ready' && (
+                  <button
+                    type="button"
+                    className="btn btn--ghost"
+                    data-testid="camera-join"
+                    disabled={!session}
+                    onClick={() => void connect(false)}
+                  >
+                    Join without a camera
+                  </button>
+                )}
+              </div>
+            ) : (
+              <button type="button" className="btn btn--ghost" data-testid="camera-stop" onClick={retry}>
+                Stop
+              </button>
+            )}
+          </>
         )}
       </main>
     </div>

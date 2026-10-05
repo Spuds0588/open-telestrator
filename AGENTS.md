@@ -68,8 +68,8 @@ runs the tests before building, so a failing test blocks the deploy to prod.
   (hooks, `use*` modules) and components stay thin. Anything that broke once —
   source merging, camera links, stroke geometry, replay rotation, error
   classification, peer config, the broadcast protocol, compositor geometry,
-  media-feed classification, hardware mappings — has unit tests; keep it that
-  way when you change those paths.
+  media-feed classification, hardware mappings, shared-drawing operations — has
+  unit tests; keep it that way when you change those paths.
 - **The stage is the program.** While broadcasting, `useProgramCompositor`
   redraws the stage — video, live corner, corner camera, strokes — into the one
   canvas stream viewers receive, so drawings and overlays are on air. Draw
@@ -82,6 +82,18 @@ runs the tests before building, so a failing test blocks the deploy to prod.
   therefore re-drawn onto a canvas (`useMediaFeeds`), which also keeps the last
   frame on screen. Their audio is routed through the mixer as a media-element
   source, not through the capture.
+- **Shared drawing has one writer: the host.** The cameraman link is also the
+  co-host link, and sharing the camera is optional on that page (a co-host that
+  only draws connects on the data channel alone). Camera media stays one-way, but
+  the host additionally calls a co-host back with the *raw* program source so it
+  has something to draw on —
+  never the composite, which already has the strokes burned in. Both sides trade
+  validated operations over the link's data channel (`src/lib/collab.ts`); the
+  host applies each one to the stack the compositor puts on air and forwards it
+  to the other co-hosts (the sender already has it), and a co-host never
+  forwards. Applying an operation is idempotent per stroke id, which is what
+  makes that safe. Both canvases must stay 16:9 so a stroke lands in the same
+  place on each.
 - **One error classifier per concern, shared.** `classifyCameraError` and its
   friends live in `src/lib/mediaErrors.ts` and are used by both the host and the
   cameraman page; do not fork a copy.

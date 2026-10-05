@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { mergeStageSources, type StageFeed } from './sources'
+import { mergeStageSources, sourceRemoval, type StageSource, type StageFeed } from './sources'
 
 function fakeStream(id: string): MediaStream {
   return { id } as unknown as MediaStream
@@ -53,5 +53,30 @@ describe('mergeStageSources', () => {
       [feed('camera:cam:webcam', 'Impostor camera')],
     )
     expect(new Set(sources.map((source) => source.id)).size).toBe(sources.length)
+  })
+})
+
+describe('sourceRemoval', () => {
+  const at = (id: string, kind: StageSource['kind']): StageSource => ({
+    id,
+    label: id,
+    kind,
+    stream: fakeStream(id),
+  })
+
+  it('stops the shared screen', () => {
+    expect(sourceRemoval(at('screen', 'screen'))).toEqual({ by: 'screen' })
+  })
+
+  it('stops an opened file or stream by feed id', () => {
+    expect(sourceRemoval(at('media:2', 'media'))).toEqual({ by: 'media', id: 'media:2' })
+  })
+
+  it('stops one of the host cameras by device id', () => {
+    expect(sourceRemoval(at('cam:abc123', 'camera'))).toEqual({ by: 'camera', deviceId: 'abc123' })
+  })
+
+  it('leaves a co-host camera to the Co-hosts group', () => {
+    expect(sourceRemoval(at('camera:peer-1', 'camera'))).toBeNull()
   })
 })

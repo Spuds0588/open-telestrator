@@ -12,37 +12,44 @@ Desktop-only browser PWA — **capture, telestration, instant replay, stage audi
 a magic-link cameraman feed, opened video files and streams, and a viewer
 broadcast that fans the composited program out to phones as a PeerJS tree**.
 Everything lives in one compact sidebar on the right: the drawing tools; an
-**Input** stack that shares a tab, opens any of the host's own cameras (an array
-of USB cameras shows up as several previewable feeds), takes a dropped-in video
-file or an HLS/MP4 stream URL, and invites cameraman(s) — every live feed listed
-as a clickable thumbnail; a **Program** group with the on-air corner camera and
-the transport for an opened file; the **Audio** mixer (announcer mic and captured
-program audio, each with mute, volume and a live level meter); **Instant
-replay**; **Broadcast**; and **Hardware** triggers. The 16:9 stage is scaled with
+an **Input** group with a single **＋ Add input** button: it opens a picker to
+share a tab, open any of the host's own cameras (an array of USB cameras shows
+up as several feeds), drop in a video file or paste an HLS/MP4 URL, and that
+input's preview then joins the list, each one clickable to put it on the program
+and removable from the same row; a **Program** group with the on-air corner camera and the transport
+for an opened file; the **Audio** mixer (announcer mic and captured program
+audio, each with mute, volume and a live level meter); **Instant replay**; a
+**Co-hosts** group that mints the invite link and QR, lists who is connected and
+can drop one; **Broadcast**; and **Hardware** triggers. The 16:9 stage is scaled with
 `transform` to fit, so the video keeps its ratio without squeezing the sidebar,
 and the telestration canvas draws straight on top. Cameraman invites open a large
 QR dialog with a copyable link. Keyboard shortcuts are badges on the controls they
 belong to.
 The **Broadcast** group goes live to viewers and shows how many are watching; the
-same count is reported to any connected co-host.
+same count is reported to any connected co-host, who can also draw on the same
+canvas (see **Shared drawing** below).
 Phones and tablets are not supported by this web app and get a notice pointing
 at the GitHub releases instead; the cameraman and viewer pages still work on any
-device. Shared-drawing collaboration (a second person drawing on the host's
-canvas) is not built yet.
+device.
 
 ## Cameraman magic link
 
-On the host, click **🎥 Invite a cameraman** to mint a session link. Opening that
-link on a phone loads a tiny cameraman view (code-split, so it never downloads
-the host stage) that asks for the camera and streams it to the host over PeerJS.
-The media transport is strictly **one-way**: the host answers each media call with
-no return stream, and the link's per-session token is checked first — a call whose
-token does not match is closed without an answer. A small data channel in the
-other direction carries one thing back, the viewer count, so the cameraman can
-see how many people are watching; it is repeated every few seconds rather than
-sent only on change, so a dropped message cannot leave a stale number on screen. Accepted feeds appear in the
-**Sources** row and can be selected as the program input alongside the shared
+On the host, **Co-hosts → 🎨 Invite a co-host** mints a session link. Opening it
+on a phone loads a tiny view (code-split, so it never downloads the host stage)
+that can share the camera and draw on the program — the camera is optional, so a
+co-host who is only there to telestrate never has to grant it. Every connected
+co-host is listed on the host, with a button to drop it.
+The camera path is strictly **one-way**: the host answers the camera call with no
+return stream, and the link's per-session token is checked first — a call whose
+token does not match is closed without an answer. Accepted camera feeds appear in
+the **Sources** row and can be selected as the program input alongside the shared
 screen.
+
+A token-checked data channel runs alongside it. Down it the host repeats the
+viewer count, so the cameraman can see how many people are watching — repeated
+every few seconds rather than sent only on change, so a dropped message cannot
+leave a stale number on screen. Both ways over that same channel travel the
+drawing operations described next.
 
 PeerJS's public broker is used by default. To run against your own broker or add
 STUN/TURN servers (worth it for cameramen on mobile data), set build-time env
@@ -57,6 +64,26 @@ VITE_PEER_SECURE=true
 # JSON array of RTCIceServer objects; unset → PeerJS's default STUN.
 VITE_ICE_SERVERS='[{"urls":"stun:stun.example.com:3478"},{"urls":"turn:turn.example.com","username":"u","credential":"p"}]'
 ```
+
+## Shared drawing with a co-host
+
+The cameraman is also the co-host. Once its channel is open the host calls it
+back with the program picture, and both ends draw on the same canvas: a stroke
+the co-host makes shows up on the host's stage — and therefore on air — within a
+round trip, and a stroke the host makes shows up on the co-host's canvas.
+
+Strokes are already normalized to the frame (0.0–1.0), so a line drawn on a
+phone lands in the same place on the broadcast. The co-host draws on the raw
+program source, not the composited picture, because the composite already has
+the shared strokes burned in and sending that would paint every stroke twice;
+both sides letterbox the same source into a 16:9 frame, so the two line up. The
+host is the single writer of the stroke stack — it applies each operation, puts
+it on air, and forwards it to the other co-hosts — and a co-host never forwards
+what it receives, so an operation travels at most one hop and cannot loop.
+
+On the cameraman page the tools live behind **✎ Draw on the program**: the same
+tools and colours as the host, with undo and clear. It is a separate mode on
+purpose, so the phone keeps showing the camera the rest of the time.
 
 ## Inputs: cameras, files and streams
 
@@ -224,11 +251,12 @@ npm run preview    # serve the production build
 ```
 
 `npm run dev` serves the landing page at `/` and the studio at `/app.html`.
-Open the studio, click **Share a tab**, pick a browser tab, then draw. Use the
-**Input** stack to open a camera, drop in a video file or stream URL, or invite
-a cameraman; click any feed in the list to put it on the program. The **Audio**
-section enables and mixes the announcer mic, and **Replay** plays the last
-several seconds at 0.5×.
+Open the studio, click **＋ Add input → Share a tab or screen**, pick a browser
+tab, then draw. The same picker opens a camera, drops in a video file or takes a
+stream URL; click any input in the list to put it on the program, or its ✕ to
+stop it. Invite a co-host from the **Co-hosts** group. The **Audio** section
+enables and mixes the announcer mic, and **Replay** plays the last several
+seconds at 0.5×.
 
 Shortcuts: `1`–`4` tools, `C`/`X` colour, `Z` undo, `Delete` clear, `[`/`]`
 previous/next source, `R` replay (play/pause while replaying), `L` back to live.

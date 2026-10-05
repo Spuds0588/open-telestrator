@@ -5,13 +5,14 @@ import { useHostCameras } from './lib/useHostCameras'
 import { useMediaFeeds } from './lib/useMediaFeeds'
 import { useAudioMixer } from './lib/useAudioMixer'
 import { useReplay } from './lib/useReplay'
-import { mergeStageSources } from './lib/sources'
+import { COHOST_CAMERA_PREFIX, mergeStageSources } from './lib/sources'
 import { useBroadcast } from './lib/useBroadcast'
 import { mixBroadcastStream } from './lib/broadcast'
 import { useProgramCompositor } from './lib/useProgramCompositor'
 import { useQrCode } from './lib/useQrCode'
 import { useHardware } from './lib/useHardware'
 import type { HardwareAction } from './lib/hardware'
+import { applyCollabOp, drawOp, type CollabOp } from './lib/collab'
 import {
   COLORS,
   DEFAULT_COLOR,
@@ -48,7 +49,23 @@ export default function App() {
   // The viewer tree comes first: the cameraman session reports its count to the
   // co-hosts, so it needs the number to exist before it is created.
   const broadcast = useBroadcast()
-  const camera = useHostCamera(broadcast.viewers)
+
+  // Drawing state owned by the host (see Sidebar / TelestrationOverlay). It sits
+  // above the camera session because the co-host shares this very stack. The
+  // stroke width is fixed in the web MVP; a settings panel can expose it later.
+  const [tool, setTool] = useState<Tool>(DEFAULT_TOOL)
+  const [color, setColor] = useState<string>(DEFAULT_COLOR)
+  const width = DEFAULT_WIDTH
+  const [past, setPast] = useState<Stroke[]>([])
+  const [future, setFuture] = useState<Stroke[]>([])
+
+  // A co-host's operation lands in the same stack the compositor puts on air.
+  const applyRemoteOp = useCallback((op: CollabOp) => {
+    setPast((prev) => applyCollabOp(prev, op))
+    setFuture([])
+  }, [])
+
+  const camera = useHostCamera(broadcast.viewers, { strokes: past, onRemoteOp: applyRemoteOp })
 
   // The stage's inputs, in program order: the host's shared screen, the host's
   // own cameras, opened video files and streams, then every cameraman currently
@@ -60,7 +77,7 @@ export default function App() {
         cameras.sources,
         media.feeds,
         camera.sources.map((source) => ({
-          id: `camera:${source.id}`,
+          id: `${COHOST_CAMERA_PREFIX}${source.id}`,
           label: source.label,
           stream: source.stream,
         })),
@@ -90,21 +107,10 @@ export default function App() {
     if (cornerId && (!corner || cornerId === selectedId)) setCornerId(null)
   }, [cornerId, corner, selectedId])
 
-  // Drawing state owned by the host (see Sidebar / TelestrationOverlay). The
-  // stroke width is fixed in the web MVP; a settings panel can expose it later.
-  const [tool, setTool] = useState<Tool>(DEFAULT_TOOL)
-  const [color, setColor] = useState<string>(DEFAULT_COLOR)
-  const width = DEFAULT_WIDTH
-
   // Audio and replay are owned here so their controls can live in the sidebar.
   const audio = useAudioMixer(selected?.stream ?? null, selectedElement)
   const videoRef = useRef<HTMLVideoElement>(null)
   const replay = useReplay(selected?.stream ?? null, videoRef)
-
-  // The host-owned stroke stack. `past` holds the committed strokes (most-recent)
-  // and `_future` holds strokes undone so the host can redo them with Shift+Z.
-  const [past, setPast] = useState<Stroke[]>([])
-  const [_future, setFuture] = useState<Stroke[]>([])
 
   // The stage is the program: the compositor redraws it — video, corners and
   // strokes — into one stream while viewers are being fed.
@@ -118,6 +124,17 @@ export default function App() {
     strokes: past,
     replaying: replay.replaying,
   })
+
+  // The picture a co-host draws on is the raw program source, not the composite:
+  // the co-host paints the shared strokes onto its own canvas, so sending the
+  // composite (which already has them burned in) would draw every stroke twice.
+  // Both sides letterbox the same source into a 16:9 frame, so a stroke lands in
+  // the same place on each. Publishing it opens a media call to every co-host.
+  const cohostProgram = selected?.stream ?? null
+  const { publishProgram, sendOp } = camera
+  useEffect(() => {
+    publishProgram(cohostProgram)
+  }, [publishProgram, cohostProgram])
 
   // The host publishes the composited picture plus the stage audio mix.
   const { status: broadcastStatus, setStream: publishStream } = broadcast
@@ -148,33 +165,38 @@ export default function App() {
 
   const qr = useQrCode(camera.link)
 
-  const commitStroke = useCallback((stroke: Stroke) => {
-    setPast((prev) => [...prev, stroke])
-    setFuture([])
-  }, [])
+  // Every host-side change to the stroke stack also travels to the co-hosts, so
+  // their canvas shows the same drawing as the program.
+  const commitStroke = useCallback(
+    (stroke: Stroke) => {
+      setPast((prev) => [...prev, stroke])
+      setFuture([])
+      sendOp(drawOp(stroke))
+    },
+    [sendOp],
+  )
 
   const handleUndo = useCallback(() => {
-    setPast((prev) => {
-      if (prev.length === 0) return prev
-      const last = prev[prev.length - 1]
-      setFuture((f) => [...f, last])
-      return prev.slice(0, -1)
-    })
-  }, [])
+    if (past.length === 0) return
+    const last = past[past.length - 1]
+    setPast(past.slice(0, -1))
+    setFuture((fut) => [...fut, last])
+    sendOp({ t: 'remove', id: last.id })
+  }, [past, sendOp])
 
   const handleRedo = useCallback(() => {
-    setFuture((fut) => {
-      if (fut.length === 0) return fut
-      const last = fut[fut.length - 1]
-      setPast((p) => [...p, last])
-      return fut.slice(0, -1)
-    })
-  }, [])
+    if (future.length === 0) return
+    const last = future[future.length - 1]
+    setFuture(future.slice(0, -1))
+    setPast((prev) => [...prev, last])
+    sendOp(drawOp(last))
+  }, [future, sendOp])
 
   const handleClear = useCallback(() => {
     setPast([])
     setFuture([])
-  }, [])
+    sendOp({ t: 'clear' })
+  }, [sendOp])
 
   const canUndo = past.length > 0
 

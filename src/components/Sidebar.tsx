@@ -5,7 +5,7 @@ import type { HostCameras } from '../lib/useHostCameras'
 import type { MediaFeeds } from '../lib/useMediaFeeds'
 import type { HardwareController } from '../lib/useHardware'
 import { HARDWARE_HINT } from '../lib/hardware'
-import type { StageSource } from '../lib/sources'
+import { sourceRemoval, type StageSource } from '../lib/sources'
 import type { AudioController } from '../lib/useAudioMixer'
 import type { ReplayController } from '../lib/useReplay'
 import type { BroadcastController } from '../lib/useBroadcast'
@@ -15,12 +15,14 @@ import { AudioControls } from './AudioControls'
 import { MediaTransport } from './MediaTransport'
 import { ReplayControls } from './ReplayControls'
 import { QrModal } from './QrModal'
+import { AddInputModal } from './AddInputModal'
 
 /**
  * The single control sidebar, on the right of the stage: drawing tools, the
- * input stack (a shared tab, the host's cameras, opened videos, the cameraman
- * and every live feed), the program's corner camera, the audio mixer, replay,
- * broadcast and the hardware triggers.
+ * input stack (a shared tab, the host's cameras, opened videos and every live
+ * feed), the program's corner camera, the audio mixer, replay, the **Co-hosts**
+ * group (invite, who is connected, drop one), broadcast and the hardware
+ * triggers.
  */
 export function Sidebar({
   tool,
@@ -77,7 +79,7 @@ export function Sidebar({
   // reopened from the input buttons later.
   const [showQr, setShowQr] = useState(false)
   const [showWatchQr, setShowWatchQr] = useState(false)
-  const [streamUrl, setStreamUrl] = useState('')
+  const [showAdd, setShowAdd] = useState(false)
   const viewerQr = useQrCode(broadcast.link)
   useEffect(() => {
     if (camera.link) setShowQr(true)
@@ -86,13 +88,21 @@ export function Sidebar({
   // The transport only makes sense for an opened file or stream.
   const selectedMedia = media.feeds.find((feed) => feed.id === selectedId) ?? null
 
-  const screenLabel =
-    screenStatus === 'live' ? 'Stop sharing' : screenStatus === 'requesting' ? 'Waiting…' : 'Share a tab'
-  const cameramanLabel = camera.link
-    ? '🎥 Show QR'
+  /** Stop one input from the list: the screen, one of the host's cameras, or a
+   * opened file/stream. A co-host's camera is not removable here. */
+  const removeInput = (source: StageSource) => {
+    const removal = sourceRemoval(source)
+    if (!removal) return
+    if (removal.by === 'screen') onToggleScreen()
+    else if (removal.by === 'camera') cameras.stop(removal.deviceId)
+    else media.stop(removal.id)
+  }
+
+  const inviteLabel = camera.link
+    ? '🎨 Show invite QR'
     : camera.status === 'opening'
       ? 'Connecting…'
-      : '🎥 Cameraman'
+      : '🎨 Invite a co-host'
 
   return (
     <aside className="sidebar" data-testid="sidebar" aria-label="Controls">
@@ -155,117 +165,15 @@ export function Sidebar({
 
       <section className="side-group">
         <h2 className="side-title">Input</h2>
-        <div className="btn-grid">
-          <button
-            type="button"
-            className="chip chip--wide"
-            data-testid="start-capture"
-            aria-busy={screenStatus === 'requesting'}
-            disabled={screenStatus === 'requesting'}
-            onClick={onToggleScreen}
-          >
-            {screenLabel}
-          </button>
-          <button
-            type="button"
-            className="chip"
-            data-testid="create-camera-link"
-            disabled={camera.status === 'opening'}
-            onClick={camera.link ? () => setShowQr(true) : camera.createLink}
-          >
-            {cameramanLabel}
-          </button>
-          <label className="chip chip--file" data-testid="media-file-label">
-            📁 Open file
-            <input
-              type="file"
-              accept="video/*"
-              data-testid="media-file-input"
-              className="visually-hidden"
-              onChange={(event) => {
-                const file = event.target.files?.[0]
-                if (file) media.openFile(file)
-                // Allow picking the same file again after stopping it.
-                event.target.value = ''
-              }}
-            />
-          </label>
-        </div>
-
-        {cameras.devices.length > 0 && (
-          <div className="row">
-            {cameras.devices.map((device) => {
-              const live = cameras.sources.some((source) => source.id === `cam:${device.id}`)
-              const opening = cameras.busy === device.id
-              return (
-                <button
-                  key={device.id}
-                  type="button"
-                  className={`chip ${live ? 'chip--on' : ''}`}
-                  data-testid={`camera-toggle-${device.id}`}
-                  aria-pressed={live}
-                  aria-busy={opening}
-                  disabled={opening}
-                  title={live ? `Stop ${device.label}` : `Start ${device.label}`}
-                  onClick={() => {
-                    if (live) cameras.stop(device.id)
-                    else void cameras.start(device.id)
-                  }}
-                >
-                  {opening ? 'Opening…' : `${live ? '■' : '＋'} ${device.label}`}
-                </button>
-              )
-            })}
-          </div>
-        )}
-
-        <form
-          className="row"
-          onSubmit={(event) => {
-            event.preventDefault()
-            if (streamUrl.trim()) media.openUrl(streamUrl)
-            setStreamUrl('')
-          }}
+        <button
+          type="button"
+          className="chip chip--wide"
+          data-testid="add-input"
+          onClick={() => setShowAdd(true)}
         >
-          <input
-            type="url"
-            className="link-input"
-            placeholder="https://…/stream.m3u8"
-            aria-label="Stream URL"
-            data-testid="media-url"
-            value={streamUrl}
-            onChange={(event) => setStreamUrl(event.target.value)}
-          />
-          <button type="submit" className="chip" data-testid="media-open-url" disabled={media.busy}>
-            {media.busy ? 'Opening…' : 'Open stream'}
-          </button>
-        </form>
+          ＋ Add input
+        </button>
 
-        {media.feeds.length > 0 && (
-          <div className="row">
-            {media.feeds.map((feed) => (
-              <span key={feed.id} className="tag">
-                {feed.label}
-                <button
-                  type="button"
-                  aria-label={`Stop ${feed.label}`}
-                  data-testid={`media-stop-${feed.id}`}
-                  onClick={() => media.stop(feed.id)}
-                >
-                  ✕
-                </button>
-              </span>
-            ))}
-          </div>
-        )}
-
-        {camera.link && (
-          <div className="row">
-            <button type="button" className="chip" data-testid="camera-stop" onClick={camera.stop}>
-              Stop cameraman
-            </button>
-          </div>
-        )}
         {screenNotice && (
           <p className="side-note" data-testid="screen-notice" role="alert">
             {screenNotice}
@@ -281,14 +189,9 @@ export function Sidebar({
             {media.notice}
           </p>
         )}
-        {camera.notice && (
-          <p className="side-note" data-testid="camlink-notice" role="alert">
-            {camera.notice}
-          </p>
-        )}
         {sources.length === 0 ? (
           <span className="side-empty" data-testid="feeds-empty">
-            No feeds yet
+            No inputs yet
           </span>
         ) : (
           <div className="feed-list">
@@ -298,6 +201,7 @@ export function Sidebar({
                 source={source}
                 selected={selectedId === source.id}
                 onSelect={onSelect}
+                onRemove={removeInput}
               />
             ))}
           </div>
@@ -340,6 +244,56 @@ export function Sidebar({
         <h2 className="side-title">Replay</h2>
         <ReplayControls {...replay} />
         <span className="side-hint">R replay · L live</span>
+      </section>
+
+      <section className="side-group">
+        <h2 className="side-title">Co-hosts</h2>
+        <button
+          type="button"
+          className="chip chip--wide"
+          data-testid="create-camera-link"
+          disabled={camera.status === 'opening'}
+          onClick={camera.link ? () => setShowQr(true) : camera.createLink}
+        >
+          {inviteLabel}
+        </button>
+        {camera.cohosts.length === 0 ? (
+          <span className="side-empty" data-testid="cohosts-empty">
+            No co-hosts connected
+          </span>
+        ) : (
+          <ul className="cohost-list" data-testid="cohost-list">
+            {camera.cohosts.map((cohost) => (
+              <li key={cohost.id} className="cohost" data-testid={`cohost-${cohost.id}`}>
+                <span className="cohost__name">{cohost.label}</span>
+                {cohost.streaming && <span className="cohost__tag">camera</span>}
+                <button
+                  type="button"
+                  className="cohost__drop"
+                  aria-label={`Disconnect ${cohost.label}`}
+                  data-testid={`cohost-disconnect-${cohost.id}`}
+                  onClick={() => camera.disconnect(cohost.id)}
+                >
+                  ✕
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+        <span className="side-hint">
+          Invited co-hosts draw on the program from their phone; their strokes go on air with
+          yours.
+        </span>
+        {camera.link && (
+          <button type="button" className="chip" data-testid="camera-stop" onClick={camera.stop}>
+            End co-host session
+          </button>
+        )}
+        {camera.notice && (
+          <p className="side-note" data-testid="camlink-notice" role="alert">
+            {camera.notice}
+          </p>
+        )}
       </section>
 
       <section className="side-group">
@@ -410,9 +364,19 @@ export function Sidebar({
         <span className="side-hint">{HARDWARE_HINT}</span>
       </section>
 
+      {showAdd && (
+        <AddInputModal
+          screenStatus={screenStatus}
+          onToggleScreen={onToggleScreen}
+          cameras={cameras}
+          media={media}
+          onClose={() => setShowAdd(false)}
+        />
+      )}
+
       {showQr && camera.link && (
         <QrModal
-          title="Cameraman link"
+          title="Co-host invite link"
           url={camera.link}
           qr={qr}
           onClose={() => setShowQr(false)}
@@ -431,29 +395,48 @@ export function Sidebar({
   )
 }
 
-/** A single feed row: a small live thumbnail plus its label. */
+/**
+ * A single input row: a small live thumbnail, its label, and — for an input the
+ * host can stop from here — a ✕. The row itself is the pick target; the ✕ is a
+ * sibling rather than a nested button, which HTML would not allow.
+ */
 function FeedCard({
   source,
   selected,
   onSelect,
+  onRemove,
 }: {
   source: StageSource
   selected: boolean
   onSelect: (id: string) => void
+  onRemove: (source: StageSource) => void
 }) {
+  const removable = sourceRemoval(source) !== null
   return (
-    <button
-      type="button"
-      aria-label={`Show ${source.label}`}
-      aria-pressed={selected}
-      data-testid={`feed-${source.kind}`}
-      data-source-id={source.id}
-      className={`feed-card ${selected ? 'feed-card--on' : ''}`}
-      onClick={() => onSelect(source.id)}
-    >
-      <FeedPreview src={source} />
-      <span className="feed-card__label">{source.label}</span>
-    </button>
+    <div className={`feed-card ${selected ? 'feed-card--on' : ''}`} data-source-id={source.id}>
+      <button
+        type="button"
+        aria-label={`Show ${source.label}`}
+        aria-pressed={selected}
+        data-testid={`feed-${source.kind}`}
+        className="feed-card__pick"
+        onClick={() => onSelect(source.id)}
+      >
+        <FeedPreview src={source} />
+        <span className="feed-card__label">{source.label}</span>
+      </button>
+      {removable && (
+        <button
+          type="button"
+          className="feed-card__remove"
+          aria-label={`Remove ${source.label}`}
+          data-testid={`feed-remove-${source.id}`}
+          onClick={() => onRemove(source)}
+        >
+          ✕
+        </button>
+      )}
+    </div>
   )
 }
 

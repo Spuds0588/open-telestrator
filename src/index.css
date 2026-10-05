@@ -227,13 +227,44 @@ body {
 .feed-card {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 2px;
   padding: 5px;
-  text-align: left;
   background: var(--panel-2);
   border: 1px solid var(--line);
   border-radius: 8px;
+}
+
+/* The pick target: the thumbnail and label, not the whole row, so the ✕ can
+   sit beside it. */
+.feed-card__pick {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
   cursor: pointer;
+}
+
+/* Stop this input: the shared screen, one of the host's cameras, or an opened
+   file/stream. */
+.feed-card__remove {
+  flex-shrink: 0;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  padding: 2px 6px;
+  cursor: pointer;
+}
+
+.feed-card__remove:hover {
+  color: var(--warn);
 }
 
 .feed-card:hover {
@@ -321,22 +352,6 @@ body {
   background: var(--accent-soft);
 }
 
-/* A file picker dressed as a chip. */
-.chip--file {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  cursor: pointer;
-  overflow: hidden;
-}
-
-.chip--file input {
-  position: absolute;
-  inset: 0;
-  opacity: 0;
-  cursor: pointer;
-}
-
 .visually-hidden {
   position: absolute;
   width: 1px;
@@ -344,33 +359,6 @@ body {
   overflow: hidden;
   clip: rect(0 0 0 0);
   white-space: nowrap;
-}
-
-/* Opened feeds: one removable tag each. */
-.tag {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  max-width: 100%;
-  padding: 3px 4px 3px 8px;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: var(--panel-2);
-  font-size: 11px;
-  overflow: hidden;
-}
-
-.tag button {
-  border: 0;
-  background: none;
-  color: var(--muted);
-  font: inherit;
-  padding: 0 4px;
-  cursor: pointer;
-}
-
-.tag button:hover {
-  color: var(--text);
 }
 
 /* Sidebar field rows (the corner-camera picker). */
@@ -400,6 +388,56 @@ body {
   color: var(--muted);
 }
 
+/* Connected co-hosts: one row each, with a drop button. */
+.cohost-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.cohost {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--panel-2);
+}
+
+.cohost__name {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cohost__tag {
+  font-size: 10px;
+  color: var(--muted);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 1px 6px;
+}
+
+.cohost__drop {
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  padding: 0 4px;
+  cursor: pointer;
+}
+
+.cohost__drop:hover {
+  color: var(--warn);
+}
+
 /* Transport for an opened file or stream. */
 .transport {
   display: flex;
@@ -420,17 +458,6 @@ body {
 
 .side-status {
   font-size: 12px;
-}
-
-/* Capture buttons: Share a tab spans the row, Camera and Cameraman split it. */
-.btn-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 6px;
-}
-
-.btn-grid .chip--wide {
-  grid-column: 1 / -1;
 }
 
 .icon-btn--sm {
@@ -494,6 +521,91 @@ body {
   flex: 1;
   font-size: 12px;
   padding: 8px 10px;
+}
+
+/* ── Add-input picker ────────────────────────────────────── */
+.picker {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+}
+
+/* One row per kind of input: icon, name, a line of detail. */
+.picker__row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 12px;
+  text-align: left;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.picker__row:hover {
+  border-color: var(--accent);
+}
+
+/* A source that is already added: the row becomes its stop control. */
+.picker__row--on {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.picker__row:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.picker__icon {
+  font-size: 18px;
+  line-height: 1;
+}
+
+.picker__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.picker__text strong {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.picker__sub {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.picker__empty {
+  padding: 4px 2px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+/* The URL row puts its input on its own line, full width. */
+.picker__row--url {
+  flex-wrap: wrap;
+}
+
+.picker__url {
+  display: flex;
+  gap: 6px;
+  width: 100%;
+}
+
+.picker__url .link-input {
+  flex: 1;
+  font-size: 12px;
+  padding: 7px 9px;
 }
 
 /* ── Stage: video canvas ─────────────────────────────────── */
@@ -752,7 +864,9 @@ body {
   gap: 14px;
   padding: 20px;
   min-height: 0;
-  overflow: hidden;
+  /* Auto, not hidden: the co-host's wrapped tool rows can need a scroll on a
+     short phone viewport. The preview clips its own zoom. */
+  overflow: auto;
 }
 
 .camera__preview {
@@ -782,6 +896,9 @@ body {
 
 .camera__zoom-btns {
   display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
   gap: 8px;
   margin-top: 10px;
 }
@@ -829,6 +946,54 @@ body {
   color: var(--warn);
   font-size: 13px;
   text-align: center;
+}
+
+/* The co-host's shared canvas: the program picture with the drawing tools
+   above it. Sized like the camera preview so the frame stays 16:9, which is
+   what keeps a stroke in the same place on both screens. */
+.camera__draw {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  width: min(100%, 820px);
+}
+
+.camera__draw-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.camera__draw-tools .btn {
+  padding: 6px 12px;
+  font-size: 13px;
+}
+
+.camera__draw-tools .btn.is-active {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.camera__swatches {
+  display: flex;
+  gap: 4px;
+  margin: 0 4px;
+}
+
+.camera__swatch {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border-radius: 6px;
+  border: 2px solid transparent;
+  cursor: pointer;
+}
+
+.camera__swatch.is-active {
+  border-color: var(--text);
 }
 
 /* ── Viewer player ───────────────────────────────────────────
