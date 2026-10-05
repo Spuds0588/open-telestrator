@@ -7,6 +7,7 @@ import {
   castState,
   clampVolume,
   formatClock,
+  pickPipMode,
   pickRecorderMime,
   stepVolume,
   volumeGlyph,
@@ -33,6 +34,21 @@ describe('volume', () => {
     expect(volumeGlyph(0.2, false)).toBe('🔉')
     expect(volumeGlyph(1, true)).toBe('🔇')
     expect(volumeGlyph(0, false)).toBe('🔇')
+  })
+})
+
+describe('pickPipMode', () => {
+  it('prefers document picture-in-picture, which keeps the controls', () => {
+    expect(pickPipMode(true, true)).toBe('document')
+    expect(pickPipMode(true, false)).toBe('document')
+  })
+
+  it('falls back to the video-only picture-in-picture', () => {
+    expect(pickPipMode(false, true)).toBe('video')
+  })
+
+  it('offers nothing where the browser has neither', () => {
+    expect(pickPipMode(false, false)).toBe('none')
   })
 })
 

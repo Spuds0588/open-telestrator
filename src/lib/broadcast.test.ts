@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  EMBED_PARAM,
   RESERVATION_MS,
   STALE_VIEWER_MS,
   buildViewerLink,
@@ -10,6 +11,7 @@ import {
   mixBroadcastStream,
   parseBroadcastMessage,
   parseViewerLink,
+  wantsEmbed,
 } from './broadcast'
 
 class FakeMediaStream {
@@ -48,6 +50,28 @@ describe('viewer links', () => {
     expect(parseViewerLink('https://example.com/')).toBeNull()
     expect(parseViewerLink('https://example.com/?watch=only')).toBeNull()
     expect(parseViewerLink('not a url')).toBeNull()
+  })
+})
+
+describe('wantsEmbed', () => {
+  it('recognises an embed link however it is spelled', () => {
+    expect(wantsEmbed(`https://x.test/?watch=h&t=k&${EMBED_PARAM}=1`)).toBe(true)
+    expect(wantsEmbed(`https://x.test/?watch=h&t=k&${EMBED_PARAM}=`)).toBe(true)
+    expect(wantsEmbed(`https://x.test/?watch=h&t=k&${EMBED_PARAM}=true`)).toBe(true)
+  })
+
+  it('leaves an ordinary viewer link alone', () => {
+    expect(wantsEmbed('https://x.test/?watch=h&t=k')).toBe(false)
+    expect(wantsEmbed(`https://x.test/?watch=h&t=k&${EMBED_PARAM}=0`)).toBe(false)
+    expect(wantsEmbed(`https://x.test/?watch=h&t=k&${EMBED_PARAM}=false`)).toBe(false)
+    expect(wantsEmbed('not a url')).toBe(false)
+  })
+
+  it('survives an embed flag riding along with the session', () => {
+    const link = buildViewerLink('https://x.test/', { hostId: 'h', token: 'k' })
+    const embed = `${link}&${EMBED_PARAM}=1`
+    expect(parseViewerLink(embed)).toEqual({ hostId: 'h', token: 'k' })
+    expect(wantsEmbed(embed)).toBe(true)
   })
 })
 

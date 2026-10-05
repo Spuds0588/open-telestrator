@@ -65,6 +65,21 @@ export function pickRecorderMime(isSupported: (type: string) => boolean): string
   return null
 }
 
+/** How a floating window should be opened, if at all. */
+export type PipMode = 'document' | 'video' | 'none'
+
+/**
+ * Document picture-in-picture keeps the whole player — so the controls work — in
+ * a window that stays on top of other work. Where it is missing, the browser's
+ * own video picture-in-picture is the fallback, and a browser with neither gets
+ * no button at all.
+ */
+export function pickPipMode(hasDocumentPip: boolean, hasVideoPip: boolean): PipMode {
+  if (hasDocumentPip) return 'document'
+  if (hasVideoPip) return 'video'
+  return 'none'
+}
+
 /**
  * How much paused video is worth keeping. A viewer who leaves the tab paused
  * overnight must not accumulate gigabytes, so the buffer simply stops growing —

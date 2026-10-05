@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import Peer, { type DataConnection, type MediaConnection } from 'peerjs'
 import {
   HEARTBEAT_MS,
@@ -6,6 +7,7 @@ import {
   STALL_TICKS,
   parseBroadcastMessage,
   parseViewerLink,
+  wantsEmbed,
   type ViewerSession,
 } from '../lib/broadcast'
 import {
@@ -15,6 +17,7 @@ import {
   castState,
   clampVolume,
   formatClock,
+  pickPipMode,
   pickRecorderMime,
   stepVolume,
   volumeGlyph,
@@ -30,6 +33,49 @@ interface RemotePlaybackLike {
   prompt: () => Promise<void>
   addEventListener: (type: string, listener: () => void) => void
   removeEventListener: (type: string, listener: () => void) => void
+}
+
+/** The Document Picture-in-Picture API, described structurally so older TS libs still build. */
+interface DocumentPipLike {
+  requestWindow: (options?: { width?: number; height?: number }) => Promise<Window>
+}
+
+/** The browser's floating-window API, where it has one. */
+function getDocumentPip(): DocumentPipLike | null {
+  return (window as Window & { documentPictureInPicture?: DocumentPipLike }).documentPictureInPicture ?? null
+}
+
+/** Video picture-in-picture, as the browser reports it. */
+function hasVideoPip(): boolean {
+  return 'pictureInPictureEnabled' in document && document.pictureInPictureEnabled === true
+}
+
+/**
+ * Give the floating window the app's own styles, so the stage looks the same
+ * there. Same-origin sheets are read rule by rule; anything else is linked by
+ * URL.
+ */
+function copyPlayerStyles(target: Document): void {
+  target.documentElement.style.height = '100%'
+  target.body.style.cssText = 'margin:0;height:100%;background:#000;overflow:hidden'
+  const base = target.createElement('base')
+  base.href = document.baseURI
+  target.head.append(base)
+  for (const sheet of Array.from(document.styleSheets)) {
+    try {
+      const css = Array.from(sheet.cssRules)
+        .map((rule) => rule.cssText)
+        .join('\n')
+      const style = target.createElement('style')
+      style.textContent = css
+      target.head.append(style)
+    } catch {
+      const link = target.createElement('link')
+      link.rel = 'stylesheet'
+      if (sheet.href) link.href = sheet.href
+      target.head.append(link)
+    }
+  }
 }
 
 /** How long the controls stay up after the last interaction, while playing. */
@@ -54,10 +100,15 @@ const CONTROLS_IDLE_MS = 2600
  */
 export default function ViewerApp() {
   const [session] = useState<ViewerSession | null>(() => parseViewerLink(window.location.href))
-  const [status, setStatus] = useState<ViewerStatus>('ready')
-  const [notice, setNotice] = useState<string | null>(
-    session ? null : 'This viewer link is incomplete. Ask the host for a fresh one.',
-  )
+  /**
+   * A viewer link goes straight to work, so the page starts connecting — there
+   * is no Watch button to press. A link missing its token has nowhere to
+   * connect to, and simply says so.
+   */
+  const [status, setStatus] = useState<ViewerStatus>(() => (session ? 'connecting' : 'ready'))
+  const [notice, setNotice] = useState<string | null>(null)
+  /** True when the link asks for the bare layout a host page can iframe. */
+  const [embed] = useState(() => wantsEmbed(window.location.href))
   const [stream, setStream] = useState<MediaStream | null>(null)
   const [parentId, setParentId] = useState<string | null>(null)
   const [children, setChildren] = useState(0)
@@ -72,10 +123,20 @@ export default function ViewerApp() {
   const [fromPause, setFromPause] = useState(false)
   const [fullscreen, setFullscreen] = useState(false)
   const [pipActive, setPipActive] = useState(false)
+  /** The floating window the stage has moved into, if there is one. */
+  const [docPip, setDocPip] = useState<Window | null>(null)
+  /** The stage's container, once React has handed it over. */
+  const [mount, setMount] = useState<HTMLDivElement | null>(null)
   const [cast, setCast] = useState<CastState>('unsupported')
 
   const videoRef = useRef<HTMLVideoElement>(null)
   const playerRef = useRef<HTMLDivElement>(null)
+  /** The container that holds the portalled stage; document PiP moves it. */
+  const mountRef = useRef<HTMLDivElement | null>(null)
+  /** The floating window, while the stage is in it. */
+  const docPipRef = useRef<Window | null>(null)
+  /** Where the container was in this page, so it can be put back. */
+  const mountHomeRef = useRef<{ parent: Element; next: Node | null } | null>(null)
   const peerRef = useRef<Peer | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
   const hostConnRef = useRef<DataConnection | null>(null)
@@ -120,6 +181,12 @@ export default function ViewerApp() {
     setBufferedMs(0)
   }, [])
 
+  /** React hands us the portal's container; keep it in reach for document PiP. */
+  const attachMount = useCallback((node: HTMLDivElement | null) => {
+    mountRef.current = node
+    setMount(node)
+  }, [])
+
   const teardown = useCallback(() => {
     clearTimers()
     for (const child of childCallsRef.current.values()) child.close()
@@ -153,7 +220,9 @@ export default function ViewerApp() {
     if (video.srcObject === stream) return
     video.srcObject = stream
     if (stream) void video.play().catch(() => undefined)
-  }, [stream])
+    // `mount` matters because the stage itself appears a beat after the first
+    // render, once React has handed over its container.
+  }, [stream, mount])
 
   // Volume and mute live on the element; the slider is the source of truth.
   useEffect(() => {
@@ -161,7 +230,7 @@ export default function ViewerApp() {
     if (!video) return
     video.volume = clampVolume(volume)
     video.muted = muted
-  }, [volume, muted])
+  }, [volume, muted, mount])
 
   // Safari only offers AirPlay when the element opts in.
   useEffect(() => {
@@ -350,17 +419,101 @@ export default function ViewerApp() {
     setMuted(value === 0)
   }, [])
 
+  // ── Picture in picture ─────────────────────────────────────────────────
+
+  /**
+   * Put the stage back where it belongs. Document PiP moves the portal
+   * container — and with it the mounted player, controls and all — into the
+   * floating window; this is the reverse trip, taken when that window closes.
+   */
+  const restoreFromPip = useCallback(() => {
+    const home = mountHomeRef.current
+    const node = mountRef.current
+    mountHomeRef.current = null
+    if (home && node && home.parent.isConnected) home.parent.insertBefore(node, home.next)
+    setDocPip(null)
+  }, [])
+
+  /**
+   * Open the stage in a document picture-in-picture window: a floating player
+   * that keeps its controls and stays on top of whatever else is on screen.
+   */
+  const openDocumentPip = useCallback(async () => {
+    const api = getDocumentPip()
+    const node = mountRef.current
+    const parent = node?.parentElement
+    if (!api || !node || !parent || docPipRef.current) return
+    let pipWindow: Window
+    try {
+      pipWindow = await api.requestWindow({ width: 640, height: 360 })
+    } catch {
+      // A framed page is not allowed a floating window; video picture-in-picture
+      // is the fallback that still works there.
+      try {
+        await videoRef.current?.requestPictureInPicture()
+        return
+      } catch {
+        setNotice('This browser would not open the floating player.')
+        return
+      }
+    }
+    copyPlayerStyles(pipWindow.document)
+    mountHomeRef.current = { parent, next: node.nextSibling }
+    pipWindow.document.body.append(node)
+    docPipRef.current = pipWindow
+    pipWindow.addEventListener('pagehide', () => {
+      docPipRef.current = null
+      restoreFromPip()
+    })
+    setDocPip(pipWindow)
+  }, [restoreFromPip])
+
+  const closeDocumentPip = useCallback(() => {
+    const pipWindow = docPipRef.current
+    if (!pipWindow) return
+    docPipRef.current = null
+    restoreFromPip()
+    pipWindow.close()
+  }, [restoreFromPip])
+
+  // Unmounting the page must not leave a floating window holding the player, nor
+  // React removing a child that has moved to another document.
+  useLayoutEffect(
+    () => () => {
+      const pipWindow = docPipRef.current
+      if (!pipWindow) return
+      docPipRef.current = null
+      restoreFromPip()
+      pipWindow.close()
+    },
+    [restoreFromPip],
+  )
+
   const toggleFullscreen = useCallback(() => {
-    if (document.fullscreenElement) void document.exitFullscreen().catch(() => undefined)
-    else void playerRef.current?.requestFullscreen().catch(() => undefined)
+    if (document.fullscreenElement) {
+      void document.exitFullscreen().catch(() => undefined)
+      return
+    }
+    // While floating, the stage is the thing on screen; full screen takes it.
+    const target = docPipRef.current ? mountRef.current : playerRef.current
+    void target?.requestFullscreen().catch(() => undefined)
   }, [])
 
   const togglePip = useCallback(() => {
-    const video = videoRef.current
-    if (!video) return
-    if (document.pictureInPictureElement) void document.exitPictureInPicture().catch(() => undefined)
-    else void video.requestPictureInPicture().catch(() => undefined)
-  }, [])
+    if (docPipRef.current) {
+      closeDocumentPip()
+      return
+    }
+    if (document.pictureInPictureElement) {
+      void document.exitPictureInPicture().catch(() => undefined)
+      return
+    }
+    if (getDocumentPip()) {
+      void openDocumentPip()
+      return
+    }
+    void videoRef.current?.requestPictureInPicture().catch(() => undefined)
+  }, [closeDocumentPip, openDocumentPip])
 
   const startCast = useCallback(() => {
     castRef.current?.prompt().catch(() => {
@@ -393,9 +546,9 @@ export default function ViewerApp() {
     return () => window.clearInterval(timer)
   }, [fromPause, backToLive])
 
-  // Familiar keyboard shortcuts.
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
+  // Familiar keyboard shortcuts, wherever the player has focus.
+  const onKeyDown = useCallback(
+    (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null
       if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) return
       switch (event.key) {
@@ -428,10 +581,35 @@ export default function ViewerApp() {
         default:
           break
       }
-    }
+    },
+    [changeVolume, pokeControls, toggleFullscreen, toggleMute, togglePlay],
+  )
+
+  useEffect(() => {
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [changeVolume, pokeControls, toggleFullscreen, toggleMute, togglePlay])
+  }, [onKeyDown])
+
+  // With the stage floating in its own window, that window has the focus, so the
+  // shortcuts have to be listened for there too.
+  useEffect(() => {
+    if (!docPip) return
+    docPip.addEventListener('keydown', onKeyDown)
+    return () => docPip.removeEventListener('keydown', onKeyDown)
+  }, [docPip, onKeyDown])
+
+  // React's pointer handlers live on this page, so the floating window needs its
+  // own nudge to keep the controls awake.
+  useEffect(() => {
+    if (!docPip) return
+    const wake = () => pokeControls()
+    docPip.addEventListener('pointermove', wake)
+    docPip.addEventListener('pointerdown', wake)
+    return () => {
+      docPip.removeEventListener('pointermove', wake)
+      docPip.removeEventListener('pointerdown', wake)
+    }
+  }, [docPip, pokeControls])
 
   // ── Tree plumbing ────────────────────────────────────────────────────────
 
@@ -650,14 +828,19 @@ export default function ViewerApp() {
 
   const retry = useCallback(() => {
     teardown()
-    setStatus('ready')
     setNotice(null)
     connect()
   }, [teardown, connect])
 
+  // Joining is what a viewer page is for: it starts on its own rather than
+  // waiting for someone to press Watch.
+  useEffect(() => {
+    if (session) connect()
+  }, [connect, session])
+
   const statusText =
     status === 'ready'
-      ? 'Ready when you are.'
+      ? 'Waiting for a viewer link.'
       : status === 'connecting'
         ? 'Connecting to the broadcast…'
         : status === 'live'
@@ -670,20 +853,23 @@ export default function ViewerApp() {
               ? 'The broadcast ended.'
               : 'Something went wrong.'
 
-  const showStart = status === 'ready'
-  const showRetry = status === 'ended' || status === 'full' || status === 'error'
+  const missingLink = session === null
+  const showRetry = !missingLink && (status === 'ended' || status === 'full' || status === 'error')
   const live = status === 'live'
-  const bigGlyph = showStart ? '▶' : showRetry ? '⟳' : playing ? '❚❚' : '▶'
+  const bigGlyph = playing ? '❚❚' : '▶'
+  const pipMode = pickPipMode(getDocumentPip() !== null, hasVideoPip())
+  // An embedded player stays uncluttered: the status chip belongs to the viewer
+  // page, and even there it is only noise once the picture is live.
+  const showStatusChip = !missingLink && (!embed || status !== 'live')
 
   const onBigButton = () => {
-    if (showStart) connect()
-    else if (showRetry) retry()
+    if (showRetry) retry()
     else togglePlay()
   }
 
   return (
     <div
-      className={`player${controlsShown || !playing ? ' player--awake' : ''}`}
+      className={`player${embed ? ' player--embed' : ''}`}
       ref={playerRef}
       data-testid="viewer"
       data-status={status}
@@ -696,160 +882,182 @@ export default function ViewerApp() {
       data-volume={volume}
       data-muted={muted ? 'yes' : 'no'}
       data-cast={cast}
+      data-embed={embed ? 'yes' : 'no'}
+      data-pip={docPip ? 'document' : pipActive ? 'video' : 'off'}
       onPointerMove={pokeControls}
       onPointerDown={pokeControls}
       onPointerLeave={() => setControlsShown(false)}
     >
-      <div className="player__stage">
-        <video
-          ref={videoRef}
-          className="player__video"
-          playsInline
-          muted={muted}
-          onClick={(event) => {
-            // Clicking the picture is the oldest video habit there is.
-            if ((event.target as HTMLElement).closest('.player__chrome')) return
-            if (live || fromPause) togglePlay()
-          }}
-          onPlay={() => setPlaying(true)}
-          onPause={() => setPlaying(false)}
-          onEnded={() => {
-            // The buffered replay ran out: rejoin the live edge.
-            backToLive()
-          }}
-        />
+      {/* The stage is portalled into this container, which is what moves to the
+          floating window — the player itself is never rebuilt. */}
+      <div className="player__mount" ref={attachMount} />
 
-        {/* Status and warnings sit away from the controls, like a stream overlay. */}
-        <div className="player__chips">
-          <span className="player__chip" data-testid="viewer-status" data-state={status} role="status">
-            {statusText}
-          </span>
-          {notice && (
-            <span className="player__chip player__chip--warn" role="alert">
-              {notice}
-            </span>
-          )}
-          {cast === 'connected' && <span className="player__chip player__chip--cast">📺 Casting</span>}
-        </div>
-
-        {!live && !fromPause && !showStart && !showRetry && (
-          <div className="player__center">
-            <span className="player__spinner" aria-hidden="true" />
-          </div>
+      {/* The page behind a floating player, or the whole page for a bad link. */}
+      <div className="player__center">
+        {missingLink && (
+          <p className="player__note">This viewer link is incomplete. Ask the host for a fresh one.</p>
         )}
-
-        {(showStart || showRetry) && (
-          <div className="player__center">
-            <button
-              type="button"
-              className="btn"
-              data-testid={showStart ? 'viewer-start' : 'viewer-retry'}
-              onClick={onBigButton}
-            >
-              {showStart ? '▶ Watch' : 'Try again'}
+        {docPip && (
+          <div className="player__note">
+            <span>Playing in the floating window.</span>
+            <button type="button" className="btn" onClick={closeDocumentPip}>
+              Bring it back
             </button>
           </div>
         )}
+      </div>
 
-        <div className="player__chrome">
-          {!showStart && !showRetry && (
-            <button
-              type="button"
-              className="player__big"
-              data-testid="viewer-play"
-              aria-label={playing ? 'Pause' : 'Play'}
-              onClick={onBigButton}
-            >
-              {bigGlyph}
-            </button>
-          )}
-
-          <div className="player__bar">
-            <button
-              type="button"
-              className="player__btn"
-              data-testid="viewer-play-small"
-              aria-label={playing ? 'Pause' : 'Play'}
-              onClick={() => live || fromPause ? togglePlay() : onBigButton()}
-            >
-              {playing ? '❚❚' : '▶'}
-            </button>
-
-            <button
-              type="button"
-              className="player__btn"
-              data-testid="viewer-audio"
-              aria-pressed={muted}
-              aria-label={muted ? 'Unmute' : 'Mute'}
-              onClick={toggleMute}
-            >
-              {volumeGlyph(volume, muted)}
-            </button>
-
-            <input
-              className="player__volume"
-              data-testid="viewer-volume"
-              type="range"
-              min="0"
-              max="1"
-              step="0.05"
-              value={muted ? 0 : volume}
-              aria-label="Volume"
-              onChange={(event) => changeVolume(Number(event.target.value))}
+      {mount &&
+        createPortal(
+          <div className={`player__stage${controlsShown || !playing ? ' player__stage--awake' : ''}`}>
+            <video
+              ref={videoRef}
+              className="player__video"
+              playsInline
+              muted={muted}
+              onClick={(event) => {
+                // Clicking the picture is the oldest video habit there is.
+                if ((event.target as HTMLElement).closest('.player__chrome')) return
+                if (live || fromPause) togglePlay()
+              }}
+              onPlay={() => setPlaying(true)}
+              onPause={() => setPlaying(false)}
+              onEnded={() => {
+                // The buffered replay ran out: rejoin the live edge.
+                backToLive()
+              }}
             />
 
-            <span className="player__live" data-testid="viewer-live" data-state={fromPause ? 'backlog' : playing ? 'live' : 'paused'}>
-              <span className="player__dot" aria-hidden="true" />
-              {fromPause
-                ? 'From your pause'
-                : playing
-                  ? 'Live'
-                  : pauseStartedRef.current !== null
-                    ? `Paused · ${formatClock(bufferedMs)}`
-                    : 'Paused'}
-            </span>
+            {/* Status and warnings sit away from the controls, like a stream overlay. */}
+            <div className="player__chips">
+              {showStatusChip && (
+                <span className="player__chip" data-testid="viewer-status" data-state={status} role="status">
+                  {statusText}
+                </span>
+              )}
+              {notice && (
+                <span className="player__chip player__chip--warn" role="alert">
+                  {notice}
+                </span>
+              )}
+              {cast === 'connected' && <span className="player__chip player__chip--cast">📺 Casting</span>}
+            </div>
 
-            <span className="player__spacer" />
-
-            {typeof document !== 'undefined' && 'pictureInPictureEnabled' in document && document.pictureInPictureEnabled && (
-              <button
-                type="button"
-                className="player__btn"
-                data-testid="viewer-pip"
-                aria-pressed={pipActive}
-                aria-label="Picture in picture"
-                onClick={togglePip}
-              >
-                ⧉
-              </button>
+            {!missingLink && !live && !fromPause && !showRetry && (
+              <div className="player__center">
+                <span className="player__spinner" aria-hidden="true" />
+              </div>
             )}
 
-            {cast !== 'unsupported' && (
-              <button
-                type="button"
-                className="player__btn"
-                data-testid="viewer-cast"
-                aria-pressed={cast === 'connected'}
-                aria-label="Cast to a screen"
-                disabled={cast === 'connecting'}
-                onClick={startCast}
-              >
-                📺
-              </button>
+            {showRetry && (
+              <div className="player__center">
+                <button type="button" className="btn" data-testid="viewer-retry" onClick={onBigButton}>
+                  Try again
+                </button>
+              </div>
             )}
 
-            <button
-              type="button"
-              className="player__btn"
-              data-testid="viewer-fullscreen"
-              aria-label={fullscreen ? 'Exit full screen' : 'Full screen'}
-              onClick={toggleFullscreen}
-            >
-              {fullscreen ? '⛶ Exit' : '⛶'}
-            </button>
-          </div>
-        </div>
-      </div>
+            <div className="player__chrome">
+              {!showRetry && (
+                <button
+                  type="button"
+                  className="player__big"
+                  data-testid="viewer-play"
+                  aria-label={playing ? 'Pause' : 'Play'}
+                  onClick={onBigButton}
+                >
+                  {bigGlyph}
+                </button>
+              )}
+
+              <div className="player__bar">
+                <button
+                  type="button"
+                  className="player__btn"
+                  data-testid="viewer-play-small"
+                  aria-label={playing ? 'Pause' : 'Play'}
+                  onClick={() => (live || fromPause ? togglePlay() : onBigButton())}
+                >
+                  {playing ? '❚❚' : '▶'}
+                </button>
+
+                <button
+                  type="button"
+                  className="player__btn"
+                  data-testid="viewer-audio"
+                  aria-pressed={muted}
+                  aria-label={muted ? 'Unmute' : 'Mute'}
+                  onClick={toggleMute}
+                >
+                  {volumeGlyph(volume, muted)}
+                </button>
+
+                <input
+                  className="player__volume"
+                  data-testid="viewer-volume"
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.05"
+                  value={muted ? 0 : volume}
+                  aria-label="Volume"
+                  onChange={(event) => changeVolume(Number(event.target.value))}
+                />
+
+                <span className="player__live" data-testid="viewer-live" data-state={fromPause ? 'backlog' : playing ? 'live' : 'paused'}>
+                  <span className="player__dot" aria-hidden="true" />
+                  {fromPause
+                    ? 'From your pause'
+                    : playing
+                      ? 'Live'
+                      : pauseStartedRef.current !== null
+                        ? `Paused · ${formatClock(bufferedMs)}`
+                        : 'Paused'}
+                </span>
+
+                <span className="player__spacer" />
+
+                {pipMode !== 'none' && (
+                  <button
+                    type="button"
+                    className="player__btn"
+                    data-testid="viewer-pip"
+                    aria-pressed={pipActive || docPip !== null}
+                    aria-label={docPip ? 'Close the floating player' : 'Picture in picture'}
+                    onClick={togglePip}
+                  >
+                    ⧉
+                  </button>
+                )}
+
+                {cast !== 'unsupported' && (
+                  <button
+                    type="button"
+                    className="player__btn"
+                    data-testid="viewer-cast"
+                    aria-pressed={cast === 'connected'}
+                    aria-label="Cast to a screen"
+                    disabled={cast === 'connecting'}
+                    onClick={startCast}
+                  >
+                    📺
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  className="player__btn"
+                  data-testid="viewer-fullscreen"
+                  aria-label={fullscreen ? 'Exit full screen' : 'Full screen'}
+                  onClick={toggleFullscreen}
+                >
+                  {fullscreen ? '⛶ Exit' : '⛶'}
+                </button>
+              </div>
+            </div>
+          </div>,
+          mount,
+        )}
     </div>
   )
 }

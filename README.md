@@ -57,8 +57,9 @@ VITE_ICE_SERVERS='[{"urls":"stun:stun.example.com:3478"},{"urls":"turn:turn.exam
 ## Broadcasting viewers
 
 Click **Broadcast → Go live to viewers** to mint a viewer link (use **Show QR**
-to put a big scannable code on screen). Viewers open the link and press **Watch**;
-they get the program video plus the stage audio mix, and nothing else — no
+to put a big scannable code on screen). Viewers open the link and are watching
+straight away — the page joins the tree on its own, with no Watch button to
+find. They get the program video plus the stage audio mix, and nothing else — no
 scrubber, no catch-up. A late joiner sees the frames that arrive after it
 connects, and its picture drifts independently of everyone else's. There is no
 shared timeline to fall behind.
@@ -93,6 +94,14 @@ that turns amber the moment the picture is no longer live. Clicking the picture
 toggles playback, and Space/K, M, F and the arrow keys do what they do everywhere
 else. Status is a small chip in the corner rather than a bar under the video.
 
+**Picture-in-picture keeps its controls.** Where the browser has Document
+Picture-in-Picture, the ⧉ button moves the whole player — picture, controls and
+all — into a floating window that stays on top of other work, so you can watch
+while doing something else; the controls and the shortcuts keep working there.
+A browser without it falls back to video picture-in-picture, which floats the
+bare picture, and a browser with neither gets no button. The page behind a
+floating player offers to bring it back.
+
 **Pausing keeps what you missed.** While paused, the viewer records what arrives
 and counts it up next to the live indicator; resuming plays that recording back
 before returning to the live edge when it runs out. The buffer stops growing at
@@ -106,6 +115,28 @@ TV; AirPlay is enabled for Safari via `x-webkit-airplay`. Casting a *live* WebRT
 stream is limited by the receiver, not by this app: the common fallback that
 always works is your browser's own "cast tab" or screen mirroring. Full screen and
 picture-in-picture are the browser's own APIs and depend on it permitting them.
+
+## Embedding the feed
+
+A viewer link goes straight into an `iframe`, which is what a portal or a
+community page wants: gate the page yourself, and let the picture play inside
+it. Add `embed=1` to drop this app's own chrome — the frame gets the picture and
+the player controls, and nothing else.
+
+```html
+<iframe
+  src="https://Spuds0588.github.io/open-telestrator/?watch=HOST_ID&t=TOKEN&embed=1"
+  width="960"
+  height="540"
+  allow="autoplay; fullscreen; picture-in-picture"
+  allowfullscreen
+></iframe>
+```
+
+The link works as it is; `embed=1` only changes what the viewer page draws. The
+feed still starts on its own, and the status chip appears only when something
+needs attention. The app serves no frame headers of its own, so whether a page
+may be framed is entirely the embedding page's business.
 
 ## Development
 

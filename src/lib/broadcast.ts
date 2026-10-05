@@ -16,6 +16,23 @@
 /** Query parameter holding the host's PeerJS id. Marks the viewer page. */
 export const WATCH_PARAM = 'watch'
 
+/**
+ * Asking a viewer link for the bare layout, for pages that embed the feed.
+ * A portal putting the picture on its own page wants the video and its controls,
+ * not this app's status chrome around it.
+ */
+export const EMBED_PARAM = 'embed'
+
+/** Whether a viewer link asks to be shown as an embed. */
+export function wantsEmbed(href: string): boolean {
+  try {
+    const value = new URL(href).searchParams.get(EMBED_PARAM)
+    return value !== null && value !== '0' && value !== 'false'
+  } catch {
+    return false
+  }
+}
+
 /** Viewer children a single node (host or relay) will accept. */
 export const MAX_CHILDREN = 2
 
