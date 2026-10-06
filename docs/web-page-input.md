@@ -234,11 +234,15 @@ same `MediaStream` seam.
 
 ## Recommended shape
 
-**A first**, because it is the cheapest route and it is now measured on the
-platform that matters. Injected into a browser webview we own, it turns a live
-YouTube stream into a stage source with no permission, no capture dialog, no new
-platform code and no second decode — and it reaches **the phone**, since Android's
-WebView is Chromium.
+**A first**, because it is the cheapest route and it is now measured on six
+platforms rather than one. Injected into a browser webview we own, it turns a live
+stream into a stage source with no permission, no capture dialog, no new platform
+code and no second decode — and it reaches **the phone**, since Android's WebView
+is Chromium. The sweep found no platform where the player worked and route A did
+not: Twitch, Kick, Rumble, Facebook and Bilibili all behaved exactly as YouTube
+did, because all six ship the same MSE `blob:`. What it *did* find is that the
+bridge must choose which element to take, and that the platforms most people name
+first gate a logged-out session — see [the measurements](#what-has-been-measured).
 
 **T** follows only where A cannot run: macOS and Linux, whose WebKit has no
 `captureStream()`. It is no longer first in line, and it is worth building only
@@ -327,6 +331,131 @@ not have.
 
 Both probes are deleted, along with their servers. What they answered was the
 design question that mattered; the numbers above are the whole record.
+
+### The same question asked of eight more platforms
+
+One question, asked of every platform an operator is likely to open: does route A
+work the same way on all of them? YouTube is the row above; every other row was
+measured the same way — navigate to a live stream, let the player start, read the
+element's own state, draw one frame into a 64×36 canvas and take its mean luma,
+then call `captureStream()`, play the returned track into a second `<video>`, and
+take *that* mean luma. Real live streams over the real network, one Chromium tab,
+no injected polyfill of any kind.
+
+| platform | logged-out session | `<video>` | its `src` | canvas | `captureStream()` | captured frame |
+| --- | --- | --- | --- | --- | --- | --- |
+| **YouTube** *(baseline)* | plays | main frame | `blob:` | readable, luma 129 | 1 video + 1 audio, unmuted | 854×480, luma 128 |
+| **Twitch** | plays | main frame | `blob:` | readable, luma 36 | 1 video + 1 audio, unmuted | 1280×720, luma 35 |
+| **Kick** | plays | main frame | `blob:` | readable, luma 70 | 1 video + 1 audio, unmuted | 1280×720, luma 75 |
+| **Rumble** | plays | main frame | `blob:` | readable, luma 189 | 1 video + 1 audio, unmuted | 1920×1080, luma 189 |
+| **Facebook Live** | login prompt over the page, the player loads anyway | main frame | `blob:` | readable, luma 93 | 1 video + 1 audio, unmuted | 1920×1080, luma 77 |
+| **Bilibili Live** | plays | main frame | `blob:` | readable, luma 79 | 1 video + 1 audio, unmuted | 1280×720, luma 66 |
+| **TikTok Live** | the room renders, chat and all — **no `<video>` is ever attached** | — | — | — | — | — |
+| **Instagram** (reels, live) | login-gated; the posts never load | — | — | — | — | — |
+| **X** | hard login wall before anything | — | — | — | — | — |
+
+Six of the nine worked, and they worked *identically*: one unmuted video track,
+one unmuted audio track, and a captured frame whose luma matched the source's
+within a couple of points. The captured picture was the real picture, not black.
+That uniformity is the finding. It is not six coincidences — it is one player
+technology, and the platform names are only a list of who happens to use it.
+
+#### Every player that worked is MSE, and that is *why* it worked
+
+Each of the six served its live video through `MediaSource`, so the element's
+`src` was a `blob:` URL the page had built itself. The bytes are still on a CDN in
+another company's rack — Twitch's, Rumble's, Bilibili's — but the *resource* the
+element plays is the page's own `blob:`, and origin-clean is a property of the
+resource, not of where the bytes were fetched from. Route A does not need the
+platform's permission, its CORS headers, or its cooperation. It needs MSE, and
+MSE is what every large platform uses because it is how you do adaptive bitrate.
+
+Which means the answer generalises further than the six. The question to ask of a
+platform is not "is it big?" but "does it ship a `blob:` to a `<video>`?", and any
+platform doing HLS or DASH in the browser does.
+
+#### The ads are the exception, and they prove the rule
+
+Kick and Rumble each put a **second `<video>` on the same page** as the live
+stream — an ad fed a **cross-origin progressive MP4** (`static.kick.com`,
+`hugh.cdn.rumble.cloud`). On those, measured on the same pages as the passing rows
+above:
+
+| | the live stream | the ad element |
+| --- | --- | --- |
+| draw it into a canvas, then `getImageData` | works | **`SecurityError`** — tainted |
+| `captureStream()` | 1 video + 1 audio | **throws** `SecurityError: Cannot capture from element with cross-origin data` |
+
+This is the two-port probe from the first measurement, found in the wild, on the
+same page as a working capture. It sets a requirement the design did not have
+before: **the bridge cannot simply take the first `<video>` it finds.** It has to
+choose, and the choice is not guesswork — the live stream is the element with a
+`blob:` source and a current frame; the ad is a plain `https:` on someone else's
+host. `pickPageVideo` below is that choice, with these two pages as its test
+cases.
+
+Rumble's page also carried a third, **empty** `<video>` — no source, no frame,
+`captureStream()` returning **zero tracks without throwing**. So "no tracks" and
+"refused" are different answers and must not be collapsed into one notice.
+
+#### Two of the three refusals are the platform's, not the browser's
+
+TikTok, Instagram and X did not fail the way a black stage would suggest. They
+failed *earlier*: the page never gave us a video to judge.
+
+- **TikTok Live** rendered the entire room — title, viewer count, scrolling chat,
+suggested creators — and never attached a `<video>`. Not a muted element, not a
+`srcObject`, none at all. The stream is withheld from a logged-out session.
+- **Instagram** treated `/reel/` as a profile handle and would not load a single
+post; live viewing is behind the same wall.
+- **X** put a login wall in front of `/i/live` itself and redirected to it.
+
+No capture design can do anything about this, and the conclusion is not that the
+feature fails there — it is that **cookie-carrying browsing is a requirement, not
+a nicety.** An operator who is signed in to these sites is the ordinary case, and
+a capture path that cannot reach a signed-in page is worth little. So the browser
+webview this plan calls for must keep a **persistent profile** — the same
+storage the user's logins live in, surviving restarts — rather than starting each
+session clean. Facebook is the milder version of the same fact: its player loaded
+and captured perfectly at 1080p *behind* the login prompt, so the capture was
+never the problem; being able to browse the site was.
+
+#### A player inside someone else's page is out of reach entirely
+
+The one limitation that no engine choice fixes. A third-party page with a
+`<video>` of its own is fine — that is the ordinary case. But a third-party page
+that **embeds** the player (YouTube's `/embed/`, Twitch's player, Dailymotion's)
+puts the video inside a cross-origin iframe, and measured directly:
+
+| | observed |
+| --- | --- |
+| `iframe.contentDocument` from the page around it | **`null`** |
+| `<video>` elements visible to the page around it | **0** — the player's element is inside the frame |
+
+So on a news site that embeds a stream, the injector finds nothing, and the
+honest advice is not "start the video" — there is no video it can see. The
+operator has to open the stream **on the platform's own page**, in its own tab of
+our browser, where it is the top-level document. Where they cannot or will not,
+the existing tab/screen share is the answer, which is why that path stays in the
+build even once route A ships.
+
+#### What this changes in the plan
+
+Route A survives the sweep — nothing here made it fail where it was expected to
+work, and the refusals all have a named fallback. It does pick up three
+obligations it did not have when the plan was written:
+
+1. **Choose among the page's videos.** `pickPageVideo` in `src/lib/webPageInput.ts`,
+   pinned by the Kick and Rumble ad elements.
+2. **Keep a persistent, sign-in-able profile.** The login walls on Facebook,
+   TikTok, Instagram and X are the whole ballgame for those platforms.
+3. **Say "embedded, so unreachable" rather than "no video".** The two are
+   different situations with different fixes and must not share a notice.
+
+Still unmeasured, and still load-bearing: the same question asked inside Android's
+own WebView rather than Chrome, and Chromium is the only engine any of this has
+been measured in. The table above is Chromium's answer; macOS and Linux are the
+WebKit fallback's problem, which is why route T is Phase 3 rather than dead.
 
 ## Which engines this needs
 
@@ -497,6 +626,13 @@ those webviews at all — if the page will not play, there is nothing to tee.
   OS picker and stays listed while the studio is in front, and that capture keeps
   flowing when it is occluded. Both are platform behaviour, not ours to choose,
   and both are cheap to measure per platform.
+- **The largest platforms gate a logged-out session.** Measured: TikTok never
+  attaches a `<video>`, Instagram will not load a post, X puts a login wall in
+  front of its own live page, and Facebook's player is behind a prompt. A browser
+  that cannot carry a login is not a browser for those sites — which means a
+  **persistent profile**, and therefore that this app ends up holding the
+  operator's cookies for them. That is a privacy decision as much as a technical
+  one, and it is the one real cost of the whole approach.
 - **The claims in the README, the landing page's feature table and the two docs
   all move**: "capture a tab or screen" stops being the whole story of outside
   pages, and the phone table stops saying the phone can only read a bare link.
@@ -511,4 +647,11 @@ those webviews at all — if the page will not play, there is nothing to tee.
   the expected outcome, not a bug to work around.
 - A page whose video cannot be read (DRM, no video, refused) is refused with a
   reason, never displayed as black.
+- The video is **chosen**, not assumed: a page can carry a live stream and a
+  cross-origin ad element, and the first `<video>` is as likely to be the ad.
+- An embedded player and an empty one give different notices. "Start the video"
+  is wrong advice about a frame we cannot look inside.
+- The browser keeps a **persistent profile**, because the platforms that matter
+  (Facebook, TikTok, Instagram, X) will not show a logged-out session a stream at
+  all.
 - The browser surface is opened by `src/lib/desktop.ts` and nowhere else.

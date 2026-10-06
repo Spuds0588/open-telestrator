@@ -52,7 +52,7 @@ found it, and say in your summary what you cleaned.
 
 ```bash
 npm run dev        # dev server (http://localhost:5173)
-npm test           # Vitest, run once (262 tests)
+npm test           # Vitest, run once (269 tests)
 npm run typecheck  # tsc --noEmit
 npm run build      # typecheck + production build (also emits the service worker)
 npm run preview    # serve the production build
