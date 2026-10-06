@@ -47,6 +47,8 @@ function prevColor(current: string): string {
 
 /** The web app is desktop-only; phones and tablets get a notice instead. */
 const GITHUB_URL = 'https://github.com/Spuds0588/open-telestrator'
+/** Where the notice sends a phone: the app that is made for it. */
+const RELEASES_URL = `${GITHUB_URL}/releases/latest`
 
 export default function App() {
   const capture = useDisplayCapture()
@@ -449,11 +451,12 @@ export default function App() {
       <div className="unsupported" data-testid="unsupported-notice">
         <h1>Open Telestrator is a desktop app</h1>
         <p>
-          The web telestrator needs a desktop browser. Mobile and tablet builds are planned as
-          separate apps — follow the project on GitHub for release news.
+          The browser studio needs a desktop screen. On a phone or a tablet, get the
+          Android app; on Windows, macOS or Linux there is a desktop app as well. Both
+          are free, and both are on the releases page.
         </p>
-        <a className="btn" href={GITHUB_URL} target="_blank" rel="noreferrer">
-          View on GitHub
+        <a className="btn" href={RELEASES_URL} target="_blank" rel="noreferrer">
+          Get the app
         </a>
       </div>
     </>
