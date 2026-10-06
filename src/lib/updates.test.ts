@@ -95,6 +95,11 @@ describe('release notes', () => {
     )
   })
 
+  it('keeps an underscore that is part of a name, not emphasis', () => {
+    // The release notes name the assets: `x86_64` is not italic markdown.
+    expect(notesSummary('**Linux (x86_64)** — checked')).toBe('Linux (x86_64) — checked')
+  })
+
   it('cuts a long changelog rather than growing the prompt', () => {
     const long = 'a'.repeat(NOTES_LIMIT * 2)
     const summary = notesSummary(long)

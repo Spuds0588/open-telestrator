@@ -150,8 +150,11 @@ export const NOTES_LIMIT = 320
  */
 export function notesSummary(notes: string | null | undefined, limit = NOTES_LIMIT): string | null {
   if (!notes) return null
+  // Emphasis markers and heading hashes come off, but not `_`: an underscore in a
+  // changelog is far more often part of a name than an italic marker, and eating it
+  // turns every `x86_64` into `x8664` in the line the operator actually reads.
   const flat = notes
-    .replace(/[#*_>`]/g, '')
+    .replace(/[#*>`]/g, '')
     .replace(/\s+/g, ' ')
     .trim()
   if (!flat) return null
