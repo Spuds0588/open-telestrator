@@ -369,9 +369,16 @@ it — a fresh download is a new signature and may ask again.
 
 The release notes carry exactly that instruction in one paragraph, because the
 app's own update prompt shows the first `NOTES_LIMIT` (320) characters of them.
-The other honest half: the assembly, the lint and the zip happen only on the
-macOS runner, and **nobody has opened the bundle on a Mac** to watch TCC prompt —
-this machine cannot make a Mach-O, let alone run one. See *What is left*.
+The v0.1.1 run did all of its own part, and the log is the evidence: `bundle.mjs`
+reporting the arm64 binary with three usage strings, `plutil -lint` answering
+`OK`, `codesign` reporting `Signature=adhoc` on `app bundle with Mach-O thin
+(arm64)`, and the zip carrying `Contents/_CodeSignature/CodeResources`. The
+artifact that run produced was then downloaded and opened here: its plist parses
+with `0.1.1` and all three usage strings, its payload is an arm64 Mach-O, and
+`Contents/MacOS/open-telestrator` arrives `0755` — `ditto` keeps the mode that
+matters. The other honest half needs a person: **nobody has opened the bundle on
+a Mac** and watched TCC put its prompt on screen, which is the one thing this
+machine cannot do.
 
 **An Intel macOS build.** `macos-latest` is Apple Silicon, so today's matrix
 produces one macOS build for ARM Macs. An Intel build means a second macOS job
@@ -506,10 +513,10 @@ could sit side by side in one release.
   usage strings present; and the bundle survives a zip and unzip with
   `Contents/MacOS/open-telestrator` still `0755`. It also refuses a template
   missing a usage string, which is the mistake that would ship a bundle macOS
-  will not ask on behalf of. What is **not** proved here is the plist as `plutil`
-  reads it, the ad-hoc signature, and TCC actually granting camera, microphone
-  and screen recording on a Mac — the first two happen in CI, and the last needs
-  somebody with a Mac.
+  will not ask on behalf of. What the *runner* adds is in the v0.1.1 log, and the
+  artifact it produced was checked from here as well — see *Signing, per
+  platform*. What is **not** proved anywhere yet is TCC actually granting camera,
+  microphone and screen recording on a Mac, which needs somebody with a Mac.
 - **The platform presets have not been dialled.** Facebook Live's address comes
   from the list OBS maintains; Instagram's from two independent sources, since
   OBS does not carry it. Without an account on each service there is no way to

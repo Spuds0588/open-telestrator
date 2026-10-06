@@ -80,9 +80,12 @@ runs the tests before building, so a failing test blocks the deploy to prod. The
 workflow does not build the desktop app, so a Rust change is only as verified as
 what you ran locally. `.github/workflows/desktop-release.yml` does build it, on
 all three platforms at once, but only from a `v*` tag — `v0.1.0` was its first
-run, and all three jobs produced their asset. It labels the Windows and macOS
-assets `-beta` and still files only a **draft**: publishing is the one step left
-to a person.
+run and `v0.1.1` its second, each time with all three jobs producing their asset.
+It labels the Windows and macOS assets `-beta` and still files only a **draft**:
+publishing is the one step left to a person. The workflow is also the only place
+the macOS `.app` is assembled, so a change there is unverified until a tag —
+`docs/tauri-desktop.md` records what the v0.1.1 log showed and what still needs
+somebody with a Mac.
 
 ## Conventions
 
