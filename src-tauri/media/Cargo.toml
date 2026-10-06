@@ -1,6 +1,6 @@
 [package]
 name = "telestrator-media"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 publish = false
 description = "RTMP publishing for the Open Telestrator desktop build"
