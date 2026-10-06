@@ -1,0 +1,15 @@
+[package]
+name = "telestrator-media"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "RTMP publishing for the Open Telestrator desktop build"
+
+[lib]
+name = "telestrator_media"
+path = "src/lib.rs"
+
+# Deliberately empty. The protocol, the container and the timing are all
+# hand-rolled so the crate builds in a second and can be tested without a
+# server; see src/lib.rs for what replaced each crate we did not take.
+[dependencies]

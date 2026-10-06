@@ -1,0 +1,34 @@
+[package]
+name = "open-telestrator"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Open Telestrator desktop build"
+rust-version = "1.77"
+
+# The media crate is a member so it can be tested on its own, without Tauri's
+# dependency tree in the way: `cargo test -p telestrator-media` takes a second.
+[workspace]
+members = ["media"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon"] }
+tauri-plugin-global-shortcut = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+telestrator-media = { path = "media" }
+
+[features]
+# Used by `tauri build` so the app loads the bundled frontend rather than a dev
+# server.
+custom-protocol = ["tauri/custom-protocol"]
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+panic = "abort"
+strip = true

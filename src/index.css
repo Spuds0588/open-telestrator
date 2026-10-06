@@ -715,6 +715,74 @@ body {
   border-radius: 7px;
 }
 
+.field__input {
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  padding: 6px 8px;
+  border-radius: 7px;
+  min-width: 0;
+}
+
+.field__input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* Stream out, at the bottom of the Broadcast panel. It lives here rather than in
+   a panel of its own because putting the program on air is one concern whether
+   the audience is the viewer tree or a platform. */
+.stream-out {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+}
+
+.stream-out__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.stream-out__title svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* Control mode, in the desktop shell only.
+
+   The window has been told to ignore cursor events, so the pointer belongs to
+   whatever is underneath. For that to be useful the window has to stop being a
+   picture of the thing underneath it and become a clear pane instead: the
+   chrome steps aside here, and the shell's own window is transparent.
+
+   `pointer-events: none` is the second lock on the door — the OS should never
+   deliver an event, but a stray drag that somehow arrives must not be able to
+   commit a stroke nobody drew. Strokes already on air stay on air: the mode
+   touches nothing about the compositor. */
+body.control,
+body.control #root,
+body.control .app,
+body.control .stage,
+body.control .screen {
+  background: transparent;
+}
+
+body.control .rail,
+body.control .panel,
+body.control .stage {
+  opacity: 0;
+  pointer-events: none;
+}
+
 .side-hint {
   font-size: 10px;
   color: var(--muted);

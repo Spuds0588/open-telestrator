@@ -52,15 +52,29 @@ found it, and say in your summary what you cleaned.
 
 ```bash
 npm run dev        # dev server (http://localhost:5173)
-npm test           # Vitest, run once (104 tests)
+npm test           # Vitest, run once (195 tests)
 npm run typecheck  # tsc --noEmit
 npm run build      # typecheck + production build (also emits the service worker)
 npm run preview    # serve the production build
 npm run clean      # remove build output and caches
 ```
 
+The Rust half of the desktop build has its own commands. The publisher is a
+member crate on purpose, so its tests run without Tauri's dependency tree
+anywhere near them:
+
+```bash
+npm run desktop            # the shell, with hot reload in the webview
+npm run desktop:build      # a bundle for the current platform
+cargo build                # in src-tauri/
+cargo test -p telestrator-media     # AMF0, FLV, chunk framing, RTMP, timing
+cargo test -p open-telestrator      # the frame wire format the shell parses
+```
+
 `npm run build` runs the typecheck first, and `.github/workflows/deploy-pages.yml`
-runs the tests before building, so a failing test blocks the deploy to prod.
+runs the tests before building, so a failing test blocks the deploy to prod. The
+workflow does not build the desktop app, so a Rust change is only as verified as
+what you ran locally.
 
 ## Conventions
 
@@ -133,7 +147,35 @@ runs the tests before building, so a failing test blocks the deploy to prod.
   parameter stays as an explicit override. Keep that logic in the lib with its
   tests rather than reading `window` in the component.
 - **Click-through "Control" mode belongs to the Tauri build, not this one**, where
-  the canvas always draws and never passes input to the page underneath.
+  the canvas always draws and never passes input to the page underneath. The
+  desktop build has it: one window made to ignore cursor events
+  (`src/lib/controlMode.ts` for the rules, `src-tauri/src/control.rs` for the
+  window call), with the global shortcut, the tray icon and the rail's own switch
+  as the ways back out. It is deliberately **one** window, not two — the stroke
+  stack, the display capture and the broadcast all live in one webview, and
+  splitting them across windows would fork the strokes. Streaming the program out
+  to an RTMP platform is the shell's other addition. See
+  [docs/tauri-desktop.md](docs/tauri-desktop.md).
+- **Nothing outside `src/lib/desktop.ts` may ask whether we are in the shell.**
+  Every other module asks it, so the browser keeps behaving identically and its
+  tests keep proving it. `@tauri-apps/api` is imported lazily inside it, so the
+  Pages bundle never carries the shell's API.
+- **The desktop-only rail tile comes from `desktopPanels(isDesktop)`**, never from
+  mutating `PANELS`. `panels.test.ts` proves the two rosters differ only by
+  Control at the head, so the web build keeps its seven tiles.
+- **`src-tauri/media` has no dependencies, on purpose.** The RTMP publisher is
+  hand-rolled — AMF0, FLV tag bodies, chunk framing — so its 59 tests run in a
+  second with no server and no network. Do not add a crate to it casually; if one
+  is genuinely needed, say why in the file.
+- **The frame wire format lives in two places**: `src/lib/frameHeader.ts` writes it
+  and `src-tauri/src/stream.rs` reads it, each pinned by its own tests. Change one
+  and the other fails — that is the point, so keep both in step.
+- **Encoded frames cross the IPC boundary, never pixels.** A 1080p RGBA frame is
+  megabytes before it is compressed and kilobytes after. Anything that would put
+  raw frames on that boundary needs shared memory, not a bigger call.
+- **`src-tauri/target` is a Rust build cache, not a deliverable** — gitignored,
+  and left alone by `npm run clean` because deleting it costs a two-minute
+  rebuild. `cargo clean` is there if disk matters more.
 - Broadcasting is deliberately live-only: no catch-up, no synchronisation between
   viewers. A steady picture per viewer is the goal, so keep the self-healing
   paths (host sweep, viewer rejoin) intact. The *program* may contain replays

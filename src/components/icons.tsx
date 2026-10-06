@@ -1,8 +1,10 @@
 import {
+  Cast,
   Circle,
   Highlighter,
   Joystick,
   ListVideo,
+  MousePointer2,
   Pencil,
   Radio,
   Rewind,
@@ -26,6 +28,8 @@ import type { Tool } from '../lib/telestration'
 
 /** The rail: one glyph per panel, exhaustive by type. */
 export const PANEL_ICONS: Record<PanelId, LucideIcon> = {
+  // An arrow cursor, because the panel is about where the pointer goes.
+  control: MousePointer2,
   draw: Pencil,
   input: ListVideo,
   audio: SlidersVertical,
@@ -47,3 +51,6 @@ export const TOOL_ICONS: Record<Tool, LucideIcon> = {
 
 /** Rail tiles carry a bigger glyph, so theirs is drawn with a lighter stroke. */
 export const RAIL_STROKE = 1.75
+
+/** The heading glyph for the stream-out section, which has no rail tile. */
+export const STREAM_ICON = Cast

@@ -14,14 +14,23 @@ import { useQrCode } from '../lib/useQrCode'
 import { ALL_TOOLS, COLORS, COLOR_LABELS, TOOL_LABELS, type Tool } from '../lib/telestration'
 import {
   DEFAULT_PANEL,
-  PANELS,
+  desktopPanels,
   panelBadge,
   type PanelBadge,
   type PanelId,
   type PanelSpec,
   type PanelStatus,
 } from '../lib/panels'
-import { PANEL_ICONS, RAIL_STROKE, TOOL_ICONS } from './icons'
+import {
+  canDraw,
+  hint as modeHint,
+  label as modeLabel,
+  shortcutLabel,
+  type ControlMode,
+} from '../lib/controlMode'
+import { PLATFORMS, STREAM_LABELS, destinationProblem, maskKey, platformFor } from '../lib/streamOut'
+import type { StreamOutController } from '../lib/useStreamOut'
+import { PANEL_ICONS, RAIL_STROKE, STREAM_ICON, TOOL_ICONS } from './icons'
 import { AudioControls } from './AudioControls'
 import { MediaTransport } from './MediaTransport'
 import { ReplayControls } from './ReplayControls'
@@ -66,6 +75,10 @@ export function Sidebar({
   replay,
   broadcast,
   canBroadcast,
+  desktop,
+  mode,
+  onMode,
+  stream,
 }: {
   tool: Tool
   setTool: (tool: Tool) => void
@@ -91,6 +104,11 @@ export function Sidebar({
   replay: ReplayController
   broadcast: BroadcastController
   canBroadcast: boolean
+  /** Whether the desktop shell is hosting us: it brings Control mode and stream-out. */
+  desktop: boolean
+  mode: ControlMode
+  onMode: (mode: ControlMode) => void
+  stream: StreamOutController
 }) {
   // The QR dialog opens as soon as a cameraman link is minted, and can be
   // reopened from the panel later.
@@ -141,9 +159,19 @@ export function Sidebar({
     broadcasting: broadcast.status,
     viewers: broadcast.viewers,
     gamepads: hardware.gamepads.length,
+    mode,
   }
 
-  const active = PANELS.find((item) => item.id === panel) ?? null
+  const panels = desktopPanels(desktop)
+  const active = panels.find((item) => item.id === panel) ?? null
+
+  // The shortcut the shell actually registered on this platform.
+  const shortcut = shortcutLabel(
+    typeof navigator === 'undefined' ? '' : navigator.platform || navigator.userAgent,
+  )
+
+  const streamPlatform = platformFor(stream.destination.address)
+  const streamProblem = destinationProblem(stream.destination.address, stream.destination.key)
 
   const inviteLabel = camera.link
     ? 'Show invite QR'
@@ -152,8 +180,8 @@ export function Sidebar({
       : 'Invite a co-host'
 
   const togglePanel = (id: PanelId) => setPanel((current) => (current === id ? null : id))
-  const mainPanels = PANELS.filter((item) => !item.utility)
-  const utilityPanels = PANELS.filter((item) => item.utility)
+  const mainPanels = panels.filter((item) => !item.utility)
+  const utilityPanels = panels.filter((item) => item.utility)
 
   return (
     <aside className="sidebar" data-testid="sidebar" aria-label="Controls">
@@ -207,6 +235,42 @@ export function Sidebar({
           </header>
 
           <div className="panel__body">
+            {active.id === 'control' && (
+              <>
+                {/* The switch itself. Draw is the default and the reason the
+                    app exists, so it is first and reads as selected. */}
+                <div className="opt-group">
+                  <button
+                    type="button"
+                    className={`opt-row ${canDraw(mode) ? 'opt-row--on' : ''}`}
+                    data-testid="control-draw"
+                    onClick={() => onMode('draw')}
+                  >
+                    <TOOL_ICONS.pen className="opt-row__icon" aria-hidden="true" />
+                    <span className="opt-row__label">Draw</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={`opt-row ${canDraw(mode) ? '' : 'opt-row--on'}`}
+                    data-testid="control-pass-through"
+                    onClick={() => onMode('control')}
+                  >
+                    <PANEL_ICONS.control className="opt-row__icon" aria-hidden="true" />
+                    <span className="opt-row__label">Control</span>
+                  </button>
+                </div>
+
+                <span className="side-status" data-testid="control-mode">
+                  {modeLabel(mode)}
+                </span>
+                <span className="side-hint">{modeHint(mode)}</span>
+                <span className="side-hint">
+                  A window that ignores the pointer cannot be clicked, so use {shortcut} or the
+                  tray icon to come back.
+                </span>
+              </>
+            )}
+
             {active.id === 'draw' && (
               <>
                 {/* One stacked rail of options: every choice is a row the full
@@ -474,6 +538,111 @@ export function Sidebar({
                 <span className="side-hint">
                   Viewers join at the live edge; the invite link is minted when you go live.
                 </span>
+
+                {desktop && (
+                  <div className="stream-out">
+                    <span className="stream-out__title">
+                      <STREAM_ICON aria-hidden="true" />
+                      Stream out
+                    </span>
+
+                    <label className="field field--split">
+                      <span className="field__label">Platform</span>
+                      <select
+                        className="field__select"
+                        data-testid="stream-platform"
+                        value={streamPlatform?.id ?? 'custom'}
+                        onChange={(event) => {
+                          const chosen = PLATFORMS.find((item) => item.id === event.target.value)
+                          if (chosen) stream.setDestination({ ...stream.destination, address: chosen.address })
+                        }}
+                      >
+                        {PLATFORMS.map((platform) => (
+                          <option key={platform.id} value={platform.id}>
+                            {platform.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+
+                    <label className="field">
+                      <span className="field__label">Ingest address</span>
+                      <input
+                        className="field__input"
+                        data-testid="stream-address"
+                        type="text"
+                        spellCheck={false}
+                        placeholder="rtmp://a.rtmp.youtube.com/live2"
+                        value={stream.destination.address}
+                        onChange={(event) =>
+                          stream.setDestination({ ...stream.destination, address: event.target.value })
+                        }
+                      />
+                    </label>
+
+                    <label className="field">
+                      <span className="field__label">Stream key</span>
+                      <input
+                        className="field__input"
+                        data-testid="stream-key"
+                        type="password"
+                        spellCheck={false}
+                        autoComplete="off"
+                        placeholder={streamPlatform?.keyName ?? 'Stream key'}
+                        value={stream.destination.key}
+                        onChange={(event) =>
+                          stream.setDestination({ ...stream.destination, key: event.target.value })
+                        }
+                      />
+                    </label>
+
+                    {stream.state === 'live' ? (
+                      <button
+                        type="button"
+                        className="chip chip--wide"
+                        data-testid="stream-stop"
+                        onClick={() => void stream.stop()}
+                      >
+                        Stop streaming out
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        className="chip chip--live"
+                        data-testid="stream-start"
+                        disabled={streamProblem !== null || stream.state === 'connecting'}
+                        onClick={() => void stream.start()}
+                      >
+                        {stream.state === 'connecting' ? 'Connecting…' : 'Stream out'}
+                      </button>
+                    )}
+
+                    <span className="side-status" data-testid="stream-status">
+                      {STREAM_LABELS[stream.state]}
+                      {stream.destination.key ? ` · key ${maskKey(stream.destination.key)}` : ''}
+                    </span>
+
+                    {streamProblem && stream.state !== 'live' && (
+                      <span className="side-empty" data-testid="stream-problem">
+                        {streamProblem}
+                      </span>
+                    )}
+                    {stream.failure && (
+                      <p className="side-note" data-testid="stream-failure" role="alert">
+                        {stream.failure}
+                      </p>
+                    )}
+                    {stream.warning && (
+                      <p className="side-note" data-testid="stream-warning" role="alert">
+                        {stream.warning}
+                      </p>
+                    )}
+                    <span className="side-hint">
+                      The program goes straight to the platform — drawings, corners and all. The
+                      key is kept in this window only.
+                    </span>
+                  </div>
+                )}
               </>
             )}
 

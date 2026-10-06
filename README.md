@@ -282,8 +282,41 @@ be set to **GitHub Actions** once; the site then lives at
 under `/<repo>/`, the workflow sets `VITE_BASE_PATH` to match (local dev stays at
 `/`).
 
+## Desktop app
+
+The same studio also runs as a native desktop app, in a [Tauri](https://tauri.app)
+shell that wraps the very bundle GitHub Pages serves — nothing about the UI, the
+compositor or the drawing is forked. It adds the two things a browser cannot do:
+
+- **Control mode.** In Draw the window takes clicks and you draw on it; in Control
+the whole window stops taking clicks, so the pointer belongs to the video, page
+or application underneath — you see and touch the real thing, not our copy of it.
+Switch with the rail's **Control** panel, `Ctrl/Cmd+Shift+D`, or the tray icon.
+- **Stream out to RTMP.** Push the program — drawings, corners and all — straight
+to YouTube Live, Twitch or any other RTMP ingest, without a media server or
+`ffmpeg` to install: the app opens the connection itself.
+
+```bash
+npm run desktop        # run it against the dev server
+npm run desktop:build  # bundle it for this platform
+```
+
+To go live to a platform: in YouTube Studio, **Create → Go live → Stream**, copy
+the **stream key**, then in the studio open the **Broadcast** panel, pick the
+platform, paste the key and **Stream out**. Use the `rtmp://` ingest address, not
+the `rtmps://` one (`rtmp://a.rtmp.youtube.com/live2` for YouTube,
+`rtmp://live.twitch.tv/app` for Twitch) — `rtmps://` is not implemented yet and
+the app says so if you paste one. The key is kept in the window and never shown
+in full.
+
+Building from source needs a Rust toolchain, and on Linux the WebKitGTK and GTK
+development packages. See [docs/tauri-desktop.md](docs/tauri-desktop.md) for the
+per-platform prerequisites, what is verified, and what is still to do.
+
 ## Stack
 
 Vite + React + TypeScript, packaged as an installable PWA (`vite-plugin-pwa`).
-The web build is deliberately shell-agnostic so a Tauri desktop/Android shell
-can wrap the same `dist/` output later without rework.
+The web build stays shell-agnostic so the Tauri desktop shell wraps the same
+`dist/` output — and so a mobile shell could later. The desktop-only half lives
+in `src-tauri/`, including an RTMP publisher written in Rust with no
+dependencies at all.

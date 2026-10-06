@@ -16,7 +16,10 @@ const params = new URLSearchParams(window.location.search)
 const isCameraman = params.has(CAMERA_PARAM)
 const isViewer = params.has(WATCH_PARAM)
 
-if (import.meta.env.PROD) {
+// The desktop build never registers the worker: inside the shell it is a cache
+// to invalidate rather than an offline story, because the app is installed
+// rather than visited. The import stays as it is so the module always resolves.
+if (import.meta.env.PROD && import.meta.env.MODE !== 'desktop') {
   registerSW({ immediate: true })
 }
 

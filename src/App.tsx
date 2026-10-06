@@ -21,6 +21,9 @@ import {
   type Stroke,
   type Tool,
 } from './lib/telestration'
+import { isDesktop, onControlMode, setControlMode } from './lib/desktop'
+import { DEFAULT_MODE, bodyClass, type ControlMode } from './lib/controlMode'
+import { useStreamOut } from './lib/useStreamOut'
 import { Sidebar } from './components/Sidebar'
 import { VideoStage } from './components/VideoStage'
 
@@ -58,6 +61,42 @@ export default function App() {
   const width = DEFAULT_WIDTH
   const [past, setPast] = useState<Stroke[]>([])
   const [future, setFuture] = useState<Stroke[]>([])
+
+  // The desktop shell brings two things a browser cannot: a window that can
+  // ignore the pointer, and an RTMP socket. Both are inert on the web.
+  const desktop = isDesktop()
+  const [mode, setMode] = useState<ControlMode>(DEFAULT_MODE)
+  // Whether the program should be composited for stream-out. Kept separate from
+  // the stream's own state because the compositor has to be running *before* the
+  // publisher connects, or the first seconds of the stream are a blank canvas.
+  const [streamOn, setStreamOn] = useState(false)
+
+  /** Change the mode here and, if there is a shell, in the window itself. */
+  const changeMode = useCallback((next: ControlMode) => {
+    setMode(next)
+    if (desktop) void setControlMode(next === 'control')
+  }, [desktop])
+
+  // The global shortcut and the tray icon change the mode without us: follow
+  // whatever the shell reports rather than assuming ours is authoritative.
+  useEffect(() => {
+    if (!desktop) return
+    let dispose: (() => void) | null = null
+    void onControlMode((control) => setMode(control ? 'control' : 'draw')).then((off) => {
+      dispose = off
+    })
+    return () => dispose?.()
+  }, [desktop])
+
+  // In Control mode the window is a clear pane over whatever is beneath it, so
+  // the chrome steps out of the way — see `body.control` in index.css.
+  useEffect(() => {
+    document.body.classList.toggle('control', bodyClass(mode) === 'control')
+    document.body.classList.toggle('desktop', desktop)
+    return () => {
+      document.body.classList.remove('control', 'desktop')
+    }
+  }, [mode, desktop])
 
   // A co-host's operation lands in the same stack the compositor puts on air.
   const applyRemoteOp = useCallback((op: CollabOp) => {
@@ -117,7 +156,9 @@ export default function App() {
   const liveRef = useRef<HTMLVideoElement>(null)
   const cornerRef = useRef<HTMLVideoElement>(null)
   const composited = useProgramCompositor({
-    active: broadcast.status === 'live',
+    // Viewers are fed from the composite, and so is stream-out; either one is a
+    // reason to be drawing it.
+    active: broadcast.status === 'live' || streamOn,
     videoRef,
     liveRef,
     cornerRef,
@@ -139,6 +180,14 @@ export default function App() {
   // The host publishes the composited picture plus the stage audio mix.
   const { status: broadcastStatus, setStream: publishStream } = broadcast
   const { captureStream } = audio
+
+  // Stream-out samples the same element the stage shows, so what goes to a
+  // platform is exactly the program viewers would see.
+  const stream = useStreamOut({
+    source: liveRef,
+    audio: selected ? captureStream() : null,
+    onAirChange: setStreamOn,
+  })
   // The published stream is only rebuilt when its video track changes. Audio is
   // mixed live into the same destination, so toggling the announcer mic must not
   // tear the viewer tree down and build it again.
@@ -372,6 +421,10 @@ export default function App() {
             replay={replay}
             broadcast={broadcast}
             canBroadcast={selected !== null}
+            desktop={desktop}
+            mode={mode}
+            onMode={changeMode}
+            stream={stream}
           />
         </main>
       </div>
