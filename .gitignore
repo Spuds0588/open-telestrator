@@ -17,6 +17,11 @@ coverage
 target/
 src-tauri/gen/schemas
 
+# An assembled macOS bundle, if `src-tauri/macos/bundle.mjs` is run here rather
+# than on the runner that ships it. The directory-only form keeps a file that
+# merely ends in `.app` visible.
+*.app/
+
 # The rest of `src-tauri/gen` is *not* ignored: `tauri android init` writes the
 # Gradle project the APK is built from into `gen/android`, and that is meant to
 # be committed. It carries its own `.gitignore` for the Gradle caches it makes.

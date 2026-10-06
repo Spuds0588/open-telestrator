@@ -3,8 +3,10 @@
 Status: **built and verified on Linux**, as a standalone executable. The shell
 runs, Control mode works, the program goes out to an RTMP platform — plain
 `rtmp://` or encrypted `rtmps://` — and a newer version is announced with a link
-to the release page, with an opt-out. What a *release* still needs is a Windows
-and a macOS machine to build on, listed under *What is left*.
+to the release page, with an opt-out. Windows and macOS are built by CI and handed
+out as beta, the macOS one as a zipped `.app` so its permission prompts have a
+bundle to come from; what neither has had is a person at the keyboard, which is
+the first thing under *What is left*.
 
 ```bash
 npm run desktop        # dev: vite + the shell, with hot reload in the webview
@@ -16,6 +18,12 @@ There are **no installers**, by choice: `bundle.active` is `false`, so
 `tauri build` leaves `src-tauri/target/release/open-telestrator` and nothing
 else. Downloading that file and running it *is* the installation, and the update
 path is the same one — get the newer file and run that.
+
+macOS is the one exception, and it is not an installer either: macOS hangs
+camera, microphone and screen-recording permission on a *bundle*, so the macOS
+download is a minimal `.app` — the same binary, an `Info.plist` and an icon,
+assembled by `src-tauri/macos/bundle.mjs` and zipped. Unzipping it and opening it
+is still the whole of the installation. *Signing, per platform* is the reasoning.
 
 The web app is untouched: `npm run build` still produces the GitHub Pages
 bundle, and its tests still prove it.
@@ -273,8 +281,10 @@ The tag has to match `version` in `src-tauri/tauri.conf.json` — that is the
 number a running copy compares itself against. The workflow runs the web tests
 and the Rust tests first, then `npx tauri build` on each of `ubuntu-22.04`,
 `windows-latest` and `macos-latest`, copies the binary to a per-platform asset
-name and uploads it with `gh release upload --clobber`. The draft is published
-by hand.
+name and uploads it with `gh release upload --clobber`. On macOS it wraps the
+binary in an `.app` first (`plutil` lints the plist, `codesign --sign -` ad-hoc
+signs the bundle, `ditto` zips it) — see *Signing, per platform*. The draft is
+published by hand.
 
 ### Only the Linux build is labelled as verified
 
@@ -282,7 +292,7 @@ by hand.
 | --- | --- |
 | `Open-Telestrator-linux-x86_64` | the build that has been run and checked |
 | `Open-Telestrator-windows-x86_64-beta.exe` | beta — built by CI, never run by a person |
-| `Open-Telestrator-macos-aarch64-beta` | beta — as above, and see the TCC caveat under *Signing* |
+| `Open-Telestrator-macos-aarch64-beta.zip` | beta — as above; a zipped `.app`, because macOS needs a bundle for the permission prompts |
 
 Nothing about the code differs between the three; what differs is how much of it
 somebody has watched work. Linux is the machine the shell was developed and
@@ -332,19 +342,36 @@ first. A `.pfx` (base64 in a `WINDOWS_CERTIFICATE` secret, with its password) or
 Azure Trusted Signing are the two usual ways in. None of it is wired up: it needs
 the certificate to exist first.
 
-**macOS — Gatekeeper, and a real caveat.** An unsigned download from the internet
-is quarantined, and the operator has to allow it once under **Privacy &
-Security**. A *Developer ID Application* certificate plus notarisation is the fix.
-This is also where skipping the bundle costs something real, and it is worth
-writing down plainly: macOS hangs TCC permissions — camera, microphone, **screen
-recording** — on a *bundle* with the right `Info.plist` usage strings. A bare
-executable ships no such bundle, so the first `getUserMedia` or `getDisplayMedia`
-may be refused with no dialog to approve. Those are the app's two inputs, so on
-macOS the standalone build is the least certain of the three. If it bites, the
-fix is to assemble a minimal `.app` around the binary — an `Info.plist` with
-`NSCameraUsageDescription` and `NSMicrophoneUsageDescription`, and the icons — and
-zip *that*: a packaging change, not a code one, and the reason this desktop build
-is still only *verified on Linux*.
+**macOS — a bundle, assembled by hand, signed ad-hoc, and still not notarised.**
+This is the one platform where the standalone shape costs something real, and it
+is worth writing down plainly. macOS hangs camera, microphone and **screen
+recording** permission on a *bundle* with the right `Info.plist` usage strings: an
+app with no `Info.plist` has nowhere for those strings to live, so the system
+refuses the request outright *instead of* putting a dialog on screen. Those two
+inputs are the whole app, so a bare executable is a Mac build that cannot see or
+hear. The macOS asset is therefore a zipped `.app`, assembled from the built
+binary, `src-tauri/macos/Info.plist` (the usage strings, with the product name,
+identifier and version filled in from `tauri.conf.json` so they cannot drift) and
+`icons/icon.icns`.
+
+Nothing in that path involves Apple. `src-tauri/macos/bundle.mjs` writes the
+bundle and refuses to write one whose usage strings are missing;
+`plutil -lint` — Apple's own parser, on the runner — is what says the plist is
+well formed; and `codesign --force --sign -` applies an **ad-hoc** signature,
+which is local bookkeeping rather than a certificate and is what the kernel asks
+of any arm64 binary. There is no Developer ID, no notarisation and no Apple
+Developer Program, deliberately: a certificate and a notarisation ticket both
+need an account. What is left is the friction that buys: a downloaded copy is
+quarantined, so Gatekeeper refuses the first launch and the operator allows it
+once under **System Settings → Privacy & Security → Open Anyway**. After that
+the prompts come from the bundle, and TCC remembers the answer for that copy of
+it — a fresh download is a new signature and may ask again.
+
+The release notes carry exactly that instruction in one paragraph, because the
+app's own update prompt shows the first `NOTES_LIMIT` (320) characters of them.
+The other honest half: the assembly, the lint and the zip happen only on the
+macOS runner, and **nobody has opened the bundle on a Mac** to watch TCC prompt —
+this machine cannot make a Mach-O, let alone run one. See *What is left*.
 
 **An Intel macOS build.** `macos-latest` is Apple Silicon, so today's matrix
 produces one macOS build for ARM Macs. An Intel build means a second macOS job
@@ -362,13 +389,13 @@ could sit side by side in one release.
 - **More than one destination at a time.** One publisher at a time, by design:
   a second destination would need a second encoder, and the program is one
   picture. Restreaming to several platforms at once is a different feature.
-- **A Windows and a macOS build, and the signing that goes with them.** The
-  release workflow is in place and makes both; what is not is a code-signing
-  certificate for Windows (an unsigned binary warns at SmartScreen) and, for
-  macOS, a Developer ID and notarisation. The macOS one is more than a warning,
-  because a bare executable has no bundle for TCC to hang a camera or a screen
-  recording grant on — see *Signing, per platform*. Neither can be done from
-  here, and if the macOS caveat bites it is a packaging change, not a code one.
+- **A person at a Windows and a macOS build.** The release workflow makes both,
+  and the macOS one now wraps the binary in an `.app` so the permission prompts
+  have a bundle to come from — but that machine is a runner, and nobody has sat
+  at either build. Windows also warns at SmartScreen until somebody buys a
+  code-signing certificate; the macOS bundle stays unsigned because signing it
+  means an Apple Developer account. Both are accepted friction rather than
+  unfinished code, and both are argued out under *Signing, per platform*.
 - **An APK for phones and tablets.** Config, layout and stylus rules are in
   place; the generated Android project is not, because this machine has no JDK,
   SDK or NDK. [docs/android.md](android.md) is the plan and the list of what is
@@ -470,6 +497,19 @@ could sit side by side in one release.
   window after a pen draws nothing at all, and the same touch two seconds later
   draws at the neutral width. The APK itself is not built — see
   [docs/android.md](android.md#what-is-missing).
+- **The macOS bundle was assembled on this machine from a stand-in binary.** The
+  real Mach-O is built and wrapped by the runner, which is the point — this box
+  cannot make one — but everything around it is exercised here: the script
+  refuses a file that is not a Mach-O, writes the tree, and sets the executable
+  bit; the resulting `Info.plist` parses under a real plist parser with the
+  product name, identifier and version taken from `tauri.conf.json` and all three
+  usage strings present; and the bundle survives a zip and unzip with
+  `Contents/MacOS/open-telestrator` still `0755`. It also refuses a template
+  missing a usage string, which is the mistake that would ship a bundle macOS
+  will not ask on behalf of. What is **not** proved here is the plist as `plutil`
+  reads it, the ad-hoc signature, and TCC actually granting camera, microphone
+  and screen recording on a Mac — the first two happen in CI, and the last needs
+  somebody with a Mac.
 - **The platform presets have not been dialled.** Facebook Live's address comes
   from the list OBS maintains; Instagram's from two independent sources, since
   OBS does not carry it. Without an account on each service there is no way to
@@ -479,9 +519,11 @@ could sit side by side in one release.
 ## Setting it up on a new machine
 
 To *run* a build: nothing at all. The desktop app is one executable — download
-it, `chmod +x` on Linux and macOS, run it — and there is no server to install,
-because Rust opens the RTMP connection itself. That is why this design was
-chosen over bundling a media server and `ffmpeg`.
+it, `chmod +x` on Linux, run it — and there is no server to install, because Rust
+opens the RTMP connection itself. On macOS it is an unzipped `.app` you open, and
+it needs one allow under Privacy & Security the first time; see *Signing, per
+platform*. That is why this design was chosen over bundling a media server and
+`ffmpeg`.
 
 To *build* it:
 
@@ -496,6 +538,14 @@ Then:
 ```bash
 npm install
 npm run desktop:build
+```
+
+That last one leaves the bare executable. On macOS, wrapping it is a second
+command, and worth running before you test the camera or a capture — the prompts
+only exist inside the bundle:
+
+```bash
+node src-tauri/macos/bundle.mjs --binary src-tauri/target/release/open-telestrator
 ```
 
 And to go live to a platform:

@@ -315,15 +315,18 @@ npm run desktop:build  # the standalone executable, in src-tauri/target/release
 ```
 
 There is no installer on any platform: a build leaves one executable — about 6 MB,
-webview included — and running that file *is* the installation. On Linux and macOS
-it wants `chmod +x` first, and a macOS download asks to be allowed once under
-**Privacy & Security**.
+webview included — and running that file *is* the installation. On Linux it wants
+`chmod +x` first. On macOS the download is a zipped **Open Telestrator.app**:
+unzip it, open it, and allow it once under **Privacy & Security**, because it is
+not signed with an Apple certificate — that would mean an Apple Developer
+account. It is a bundle
+rather than a bare file for a reason: macOS only asks for camera, microphone and
+screen-recording access on behalf of an app bundle, so this is what lets the two
+inputs the whole studio is built around work on a Mac at all.
 
 The Linux download is the build that has been run and checked. The Windows and
 macOS ones are labelled **beta**: CI builds them on systems nobody has driven the
-app on yet, so expect rough edges there — and on macOS, camera, microphone and
-screen-recording access can be refused outright, because a bare executable
-carries no app bundle for macOS to hang those permissions on.
+app on yet, so expect rough edges there.
 
 To go live to a platform: in YouTube Studio, **Create → Go live → Stream**, copy
 the **stream key**, then in the studio open the **Broadcast** panel, pick the

@@ -66,6 +66,7 @@ anywhere near them:
 ```bash
 npm run desktop            # the shell, with hot reload in the webview
 npm run desktop:build      # the standalone executable for this platform
+node src-tauri/macos/bundle.mjs --binary <path>   # macOS only: the .app the release ships
 npm run android            # the phone build, on a device (needs the SDK; docs/android.md)
 npm run android:build      # the APK and the AAB
 cargo build                # in src-tauri/
@@ -201,7 +202,10 @@ to a person.
   `open-telestrator.updates.notify`, an unreadable value means "tell me", and
   `shouldPrompt` lets a check the operator asked for through even when
   announcements are off — that is the way back, from the tray. A check that finds
-  nothing, or cannot reach GitHub, says nothing.
+  nothing, or cannot reach GitHub, says nothing. The release body is what the
+  prompt shows, flattened and cut at `NOTES_LIMIT` (320) characters, so the
+  workflow writes the notes as one paragraph that fits — a truncated sentence is
+  the one place an operator reads the instruction they need.
 - **The desktop app is one standalone executable, and there is no installer on
   any platform.** `bundle.active` is `false`, so `tauri build` leaves
   `src-tauri/target/release/open-telestrator` and no AppImage, `.deb`, MSI or
@@ -213,6 +217,17 @@ to a person.
   of the check on purpose (a release carries desktop binaries and an APK would
   come from a store), which is why `useUpdates` asks `shellMode()` rather than
   `isDesktop()`.
+- **The macOS download is a hand-assembled `.app`, not a Tauri bundle.** macOS
+  only asks for camera, microphone and screen-recording permission on behalf of a
+  bundle with the right `Info.plist` strings, and a bare executable is a Mac build
+  that can neither see nor hear — so `src-tauri/macos/bundle.mjs` writes the
+  bundle from the built binary, `src-tauri/macos/Info.plist` and `icons/icon.icns`,
+  filling the product name, identifier and version in from `tauri.conf.json`, and
+  the release workflow lints it with `plutil`, signs it **ad-hoc** (`codesign
+  --sign -`, no certificate and no Apple account, ever) and zips it with `ditto`.
+  The script refuses to write a bundle whose usage strings are gone — that
+  failure is invisible until a Mac user hits it. `bundle.active` stays `false`:
+  this is packaging the same standalone binary, not installing it.
 - **`src-tauri/media` has exactly one dependency, on purpose.** The RTMP
   publisher is hand-rolled — AMF0, FLV tag bodies, chunk framing — so its 63 tests
   run in a few seconds with no server and no network. TLS is the exception and

@@ -1,13 +1,23 @@
 name: Desktop release
 
-# Tag a commit `v0.1.0` — matching `src-tauri/tauri.conf.json`'s `version` — and
-# this builds one standalone executable per platform and files them as a
-# **draft** release. Nothing becomes public until somebody publishes that draft.
+# Tag a commit `v<version>`, always matching `src-tauri/tauri.conf.json`'s
+# `version`, and this builds one standalone executable per platform and files
+# them as a **draft** release. Nothing becomes public until somebody publishes
+# that draft.
 #
 # There are no installers and no signing keys: `tauri build` is configured with
 # `bundle.active: false` (see `tauri.conf.json`), so the artifact is the binary
 # itself. What that costs, and what it means for updates, is written up in
 # `docs/tauri-desktop.md#releasing`.
+#
+# macOS is the one exception, and it is not a Tauri bundle either: macOS hangs
+# camera, microphone and screen-recording permission on a bundle with usage
+# strings in its `Info.plist`, and a bare executable has nowhere to put them, so
+# the macOS job wraps the binary in a minimal `.app` by hand — see
+# `src-tauri/macos/` — and uploads that as a zip. It is signed ad-hoc (`-s -`),
+# which needs no certificate, no Apple account and no notarisation; the operator
+# allows it once under Privacy & Security. `docs/tauri-desktop.md` is the
+# write-up.
 #
 # Only the Linux build has been run by a person. Windows and macOS are built by
 # CI on systems nobody has driven the app on, so their assets carry `-beta` in
@@ -36,14 +46,17 @@ jobs:
           - platform: ubuntu-22.04
             asset: Open-Telestrator-linux-x86_64
             binary: src-tauri/target/release/open-telestrator
+            packaging: binary
           - platform: windows-latest
             asset: Open-Telestrator-windows-x86_64-beta.exe
             binary: src-tauri/target/release/open-telestrator.exe
+            packaging: binary
           - platform: macos-latest
             # Apple Silicon. An Intel build is a second runner with
             # `--target x86_64-apple-darwin`; see docs/tauri-desktop.md.
-            asset: Open-Telestrator-macos-aarch64-beta
+            asset: Open-Telestrator-macos-aarch64-beta.zip
             binary: src-tauri/target/release/open-telestrator
+            packaging: app
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v4
@@ -76,6 +89,25 @@ jobs:
       - name: Build the executable
         run: npx tauri build
 
+      # A `.app` is the only way macOS will ask for camera, microphone and
+      # screen recording, and there is no bundler here to make one. `plutil` is
+      # Apple's own parser, so it is what says the plist is well formed before
+      # anything is uploaded; the signature is ad-hoc, which satisfies the
+      # kernel's demand that an arm64 binary carry a signature and asks Apple
+      # for nothing at all.
+      - name: Wrap the macOS build in an app bundle
+        if: matrix.packaging == 'app'
+        shell: bash
+        run: |
+          set -euo pipefail
+          app="Open Telestrator.app"
+          node src-tauri/macos/bundle.mjs --binary "${{ matrix.binary }}" --out "$app"
+          plutil -lint "$app/Contents/Info.plist"
+          codesign --force --sign - "$app"
+          codesign --display --verbose=2 "$app"
+          ditto -c -k --sequesterRsrc --keepParent "$app" "${{ matrix.asset }}"
+          unzip -l "${{ matrix.asset }}"
+
       - name: File it against the release
         shell: bash
         env:
@@ -83,13 +115,16 @@ jobs:
           TAG: ${{ github.ref_name }}
         run: |
           set -euo pipefail
-          cp "${{ matrix.binary }}" "${{ matrix.asset }}"
+          if [ "${{ matrix.packaging }}" = "binary" ]; then
+            cp "${{ matrix.binary }}" "${{ matrix.asset }}"
+          fi
+          # The app's update prompt shows the first 320 characters of these
+          # notes, so this stays one paragraph that fits: a Mac operator has to
+          # know to allow the bundle once, and a truncated sentence would be the
+          # one place they are told. The reasoning behind all of it is in
+          # docs/tauri-desktop.md.
           gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" \
             --draft \
             --title "Open Telestrator $TAG" \
-            --notes "One standalone executable per platform: download it, chmod +x on Linux and macOS, and run it. Nothing is installed and nothing is left behind.
-
-          **Linux (x86_64)** — the build that has been run and checked.
-
-          **Windows (x86_64) — beta** and **macOS (Apple Silicon) — beta** — built by CI on systems nobody has driven the app on yet, so expect rough edges. The macOS download is a bare executable with no app bundle, which is what lets macOS refuse camera, microphone and screen-recording access without a dialog; see docs/tauri-desktop.md. Please report what breaks."
+            --notes "**Linux (x86_64)** — chmod +x, then run. **Windows (x86_64)** and **macOS (Apple Silicon)** are **beta**: built by CI, never run by a person. On a Mac, unzip, open **Open Telestrator.app** and allow it once under Privacy & Security — the bundle is what lets macOS ask for camera, microphone and screen recording."
           gh release upload "$TAG" "${{ matrix.asset }}" --clobber
