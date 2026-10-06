@@ -424,6 +424,11 @@ one is ever generated there. Setting it up is
   has no `getDisplayMedia`. Nobody has held it: a stylus, a palm on the glass and
   a program pushed out to a platform from the phone are the three measurements
   left. [docs/android.md](android.md#what-is-missing) is the list.
+- **A web page as an input.** Sharing a tab or screen is the only way to put
+  somebody else's page on the program, and it is the one route a phone does not
+  have. The plan is to give the app its own browser window and take the page's own
+  video as a media track — measured working on a live YouTube stream, and argued
+  out in [docs/web-page-input.md](web-page-input.md). Not built.
 - **Capture hardening.** `getDisplayMedia` works on WebView2 and WKWebView (after
   the Screen Recording grant), is unreliable on WebKitGTK, and is absent from
   Android's WebView. If a webview cannot capture, the fallback is Rust-side
