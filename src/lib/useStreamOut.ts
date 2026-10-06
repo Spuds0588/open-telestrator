@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { PLATFORMS, destinationProblem, streamTone, type Destination, type StreamState } from './streamOut'
 import { isDesktop, streamFailure, streamStart, streamStop } from './desktop'
-import { startProgramEncoder, type ProgramEncoder } from './programEncoder'
+// Type only, so the pipeline itself stays out of the studio's chunk: nothing on
+// the web can open an RTMP socket, and the encoder is dead weight there. It is
+// fetched the first time somebody actually starts a stream.
+import type { ProgramEncoder } from './programEncoder'
 
 export interface StreamOutController {
   state: StreamState
@@ -119,6 +122,7 @@ export function useStreamOut({
     }
 
     try {
+      const { startProgramEncoder } = await import('./programEncoder')
       encoderRef.current = await startProgramEncoder({
         source: element,
         audio,

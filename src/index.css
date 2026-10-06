@@ -1692,8 +1692,288 @@ body.control .stage {
   }
 }
 
+/* ── The update prompt ─────────────────────────────────────
+   One line of news from outside, over the top of the studio. A card rather
+   than a panel because it belongs to no group: it arrives once, some seconds
+   after launch, and it can be switched off for good from inside itself. */
+.updates {
+  position: fixed;
+  top: max(14px, env(safe-area-inset-top));
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 40;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  width: min(540px, calc(100vw - 24px));
+  padding: 14px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+}
+
+.updates__icon {
+  display: flex;
+  flex: none;
+  color: var(--accent);
+}
+
+.updates__icon svg {
+  width: 20px;
+  height: 20px;
+}
+
+.updates__body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.updates__title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.updates__sub,
+.updates__notes {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* Release notes are context, not a changelog: a few lines at most. */
+.updates__notes {
+  max-height: 4.6em;
+  overflow: hidden;
+}
+
+.updates__error {
+  margin: 0;
+  font-size: 12px;
+  color: var(--accent);
+}
+
+.updates__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+/* The opt-out lives in the prompt, so it can be answered where it is decided.
+   The row is a control in its own right and is sized like one. */
+.updates__mute {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  font-size: 12px;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.updates__mute input {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  accent-color: var(--accent);
+}
+
+.updates__close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 40px;
+  height: 40px;
+  margin: -8px -8px 0 0;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.updates__close:hover {
+  color: var(--text);
+  background: var(--panel-3);
+}
+
+.updates__close svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* The answer to a check the operator started themselves: one line, no actions. */
+.updates--quiet {
+  align-items: center;
+}
+
+.updates--quiet .updates__quiet-text {
+  flex: 1;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+/* A window that ignores the pointer cannot be answered, so in Control mode the
+   prompt steps out of the way with the rest of the chrome. */
+body.control .updates {
+  display: none;
+}
+
+/* ── Touch: a finger, a stylus, and a viewport that is not a window ──
+   Everything here hangs off the attributes `useLayout` puts on the body, and
+   only inside a shell: the web build keeps its desktop-only notice. The rules
+   themselves are in `src/lib/touch.ts`. */
+
+/* A finger draws, so the canvas must not also be a scrolling surface; Android
+   and iOS otherwise answer a drag with a pan, or a long press with a menu. */
+body.touch .overlay__canvas {
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+body.touch {
+  overscroll-behavior: none;
+}
+
+/* The controls were built for a mouse: the small ones grow to the 44px a
+   fingertip needs on its short side, and double-tap zoom stops eating taps. */
+body.touch .chip,
+body.touch .btn {
+  min-height: 44px;
+}
+
+body.touch .icon-btn {
+  width: 44px;
+  height: 44px;
+}
+
+body.touch .rail,
+body.touch .panel,
+body.touch .updates__actions .btn {
+  touch-action: manipulation;
+}
+
+/* The rail moves under the stage when the side rail would cost more than it
+   earns — a phone either way up, a tablet in portrait. The panel becomes a
+   sheet above it rather than a column beside it. */
+body[data-layout='compact'] .stage {
+  flex-direction: column;
+  gap: 10px;
+  padding: 8px;
+  padding-bottom: calc(8px + env(safe-area-inset-bottom));
+}
+
+body[data-layout='compact'] .sidebar {
+  flex-direction: column;
+  gap: 10px;
+  padding-left: 0;
+  /* Its height comes from the sheet and the bar inside it, never from the
+     stage: the stage is what the operator is drawing on. A phone on its side
+     has 320px to find room in, so the sheet gives way before the bar does. */
+  flex: 0 0 auto;
+  max-height: 62%;
+}
+
+body[data-layout='compact'] .screen {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+body[data-layout='compact'] .rail {
+  flex: 0 0 auto;
+  flex-direction: row;
+  align-items: stretch;
+  width: auto;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 2px;
+  /* A bar, not a scroll region: the tiles fit a phone, and where they do not
+     they are still flicked sideways rather than shown a scrollbar nobody can
+     reach. */
+  scrollbar-width: none;
+}
+
+body[data-layout='compact'] .rail::-webkit-scrollbar {
+  display: none;
+}
+
+body[data-layout='compact'] .rail__main,
+body[data-layout='compact'] .rail__util {
+  flex-direction: row;
+  align-items: stretch;
+  /* Tighter than the column the tiles were laid out for: the gaps are spent
+     out of the width the tiles need on the narrowest phone. */
+  gap: 2px;
+}
+
+/* The tile shrinks to 44 — `MIN_TARGET`, the size a fingertip needs — before the
+   bar is allowed to overflow, which is what lets seven of them fit a phone. */
+body[data-layout='compact'] .rail__item {
+  flex: 1 1 0;
+  min-width: 44px;
+  min-height: 56px;
+  max-height: none;
+  padding: 6px 2px;
+}
+
+/* A tile this narrow cannot hold "Broadcast"; the icon and the badge are what
+   the bar is read by, and the full name is in the panel once it is open. */
+body[data-layout='compact'] .rail__label {
+  font-size: 10px;
+}
+
+/* The main tiles take the width; the utilities hug their own tiles, so the bar
+   does not end with one tile stretched twice as wide as the rest. */
+body[data-layout='compact'] .rail__main {
+  flex: 1 1 auto;
+}
+
+body[data-layout='compact'] .rail__util {
+  flex: 0 0 auto;
+}
+
+body[data-layout='compact'] .rail__split {
+  width: 1px;
+  height: auto;
+  align-self: stretch;
+}
+
+/* A sheet over the stage rather than a column beside it, and measured against
+   the window rather than its own parent: a percentage of an auto-height parent
+   is circular, and it resolved to a sidebar taller than the stage. */
+body[data-layout='compact'] .panel {
+  width: auto;
+  max-height: 46vh;
+  align-self: stretch;
+  /* The one part that gives way when the bar and the sheet together are taller
+     than the space a phone on its side has left for them. */
+  flex: 0 1 auto;
+  min-height: 88px;
+}
+
 /* ── Desktop only: phones and tablets get a notice ───────── */
 .unsupported {
+  display: none;
+}
+
+/* Inside a shell the studio is what is on screen, however narrow the window:
+   the notice is for a phone *browser*, where the studio genuinely cannot run.
+   Without this a desktop window resized below 1024 — the shell's own minimum is
+   960 — would replace the studio with an invitation to download it. */
+body.desktop .app {
+  display: flex;
+}
+
+body.desktop .unsupported {
   display: none;
 }
 

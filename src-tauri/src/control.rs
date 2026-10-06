@@ -27,9 +27,11 @@ pub const WINDOW: &str = "studio";
 /// The shortcut that gets you back out of Control mode. On the desktop build
 /// this is the escape hatch that matters: a click-through window cannot be
 /// clicked, so the way back may never live inside it.
-#[cfg(target_os = "macos")]
+/// Desktop only: there is no second pointer mode without a window that can
+/// ignore one, so a phone build compiles neither of these.
+#[cfg(all(desktop, target_os = "macos"))]
 pub const SHORTCUT_LABEL: &str = "Cmd+Shift+D";
-#[cfg(not(target_os = "macos"))]
+#[cfg(all(desktop, not(target_os = "macos")))]
 pub const SHORTCUT_LABEL: &str = "Ctrl+Shift+D";
 
 #[derive(Default)]
@@ -43,11 +45,41 @@ impl ControlState {
   }
 }
 
+/// Whether this build has a second pointer mode at all.
+///
+/// A phone has no window underneath this one to hand the pointer to, and the
+/// call that makes a window ignore cursor events is desktop-only in Tauri. So
+/// the command says no rather than pretending, and the webview is told the same
+/// thing through `src/lib/desktop.ts`.
+pub const SUPPORTED: bool = cfg!(desktop);
+
 /// Put the window into one mode or the other.
 ///
 /// Failures are returned rather than logged because the only caller is a user
 /// action, and "the mode did not change" is worth saying out loud.
 pub fn set(app: &AppHandle, control: bool) -> Result<bool, String> {
+  if !SUPPORTED {
+    return Err(NO_SECOND_WINDOW.into());
+  }
+  #[cfg(desktop)]
+  {
+    return set_window(app, control);
+  }
+  #[cfg(not(desktop))]
+  {
+    // Unreachable: `SUPPORTED` is false on this target and the guard above has
+    // already returned. The webview is told the same thing through
+    // `offersControlMode` in `src/lib/controlMode.ts`, so the tile never appears.
+    let _ = (app, control);
+    unreachable!()
+  }
+}
+
+/// What the webview is told when it asks for a mode this build does not have.
+pub const NO_SECOND_WINDOW: &str = "This build has no window to pass the pointer to.";
+
+#[cfg(desktop)]
+fn set_window(app: &AppHandle, control: bool) -> Result<bool, String> {
   let window: WebviewWindow = app
     .get_webview_window(WINDOW)
     .ok_or_else(|| "the studio window is missing".to_string())?;
@@ -68,6 +100,7 @@ pub fn set(app: &AppHandle, control: bool) -> Result<bool, String> {
   Ok(control)
 }
 
+#[cfg(desktop)]
 pub fn toggle(app: &AppHandle) -> Result<bool, String> {
   let current = app
     .try_state::<ControlState>()

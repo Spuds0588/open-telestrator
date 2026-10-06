@@ -52,7 +52,7 @@ found it, and say in your summary what you cleaned.
 
 ```bash
 npm run dev        # dev server (http://localhost:5173)
-npm test           # Vitest, run once (195 tests)
+npm test           # Vitest, run once (246 tests)
 npm run typecheck  # tsc --noEmit
 npm run build      # typecheck + production build (also emits the service worker)
 npm run preview    # serve the production build
@@ -65,16 +65,20 @@ anywhere near them:
 
 ```bash
 npm run desktop            # the shell, with hot reload in the webview
-npm run desktop:build      # a bundle for the current platform
+npm run desktop:build      # the standalone executable for this platform
+npm run android            # the phone build (needs the SDK; see docs/android.md)
 cargo build                # in src-tauri/
-cargo test -p telestrator-media     # AMF0, FLV, chunk framing, RTMP, timing
+cargo test --workspace     # both members: 63 media tests, 5 shell tests
+cargo test -p telestrator-media     # AMF0, FLV, chunk framing, RTMP, TLS
 cargo test -p open-telestrator      # the frame wire format the shell parses
 ```
 
 `npm run build` runs the typecheck first, and `.github/workflows/deploy-pages.yml`
 runs the tests before building, so a failing test blocks the deploy to prod. The
 workflow does not build the desktop app, so a Rust change is only as verified as
-what you ran locally.
+what you ran locally. `.github/workflows/desktop-release.yml` does build it, on
+all three platforms at once, but only from a `v*` tag — and it has never been run,
+because a Windows and a macOS build need those systems.
 
 ## Conventions
 
@@ -130,10 +134,25 @@ what you ran locally.
   barrel is tree-shaken, so the rest of the set never reaches the bundle.
   Sizing lives in `index.css` (`.chip svg`, `.icon-btn svg`, `.rail__icon`), so a
   new control inherits it instead of setting its own width.
-- **The web app is desktop-only.** Phones and tablets get the unsupported notice
-  pointing at GitHub releases. The cameraman (`?camera=`) and viewer (`?watch=`)
-  entries live on the studio page (`app.html`) and are code-split in
-  `src/main.tsx`; they must keep working on phones.
+- **The web app is desktop-only; the *shell* is not.** A phone or tablet in a
+  browser still gets the unsupported notice pointing at GitHub releases, and the
+  cameraman (`?camera=`) and viewer (`?watch=`) entries — code-split in
+  `src/main.tsx` — must keep working there. Inside the Android shell (see
+  [docs/android.md](docs/android.md)) that notice is replaced by the studio, and
+  only there: `body.desktop` is what swaps them, and a shell sets it for any
+  narrow window, which is also what keeps a desktop window resized below 1024
+  from inviting the operator to download what they are already running.
+- **Touch and stylus rules live in `src/lib/touch.ts`, with tests.** Form factor,
+  the rail-against-sheet layout, pressure on a stroke and palm rejection are all
+  decided there and asked for by the components; the CSS hangs off
+  `body[data-layout]` and `body.touch`, which only `useLayout` sets. New controls
+  aim for `MIN_TARGET` (44px) on the short side — the floor of 40 is the worst
+  case, not the target.
+- **The shell is a library with a two-line binary.** `src-tauri/src/lib.rs` holds
+  `run()`, because Android needs `mobile_entry_point` on a function its activity
+  can call; `main.rs` only calls it. Everything a phone cannot use — the tray, the
+  global shortcut, the whole of Control mode — is `#[cfg(desktop)]`,
+  so one shell serves both without a second copy of anything.
 - **Two pages, one build.** `index.html` is the static landing page — its own
   `src/home.css`, no app bundle, and copy written for search and answer engines.
   `app.html` is the studio and serves every other entry; it is `noindex`. Every
@@ -160,13 +179,34 @@ what you ran locally.
   Every other module asks it, so the browser keeps behaving identically and its
   tests keep proving it. `@tauri-apps/api` is imported lazily inside it, so the
   Pages bundle never carries the shell's API.
-- **The desktop-only rail tile comes from `desktopPanels(isDesktop)`**, never from
-  mutating `PANELS`. `panels.test.ts` proves the two rosters differ only by
-  Control at the head, so the web build keeps its seven tiles.
-- **`src-tauri/media` has no dependencies, on purpose.** The RTMP publisher is
-  hand-rolled — AMF0, FLV tag bodies, chunk framing — so its 59 tests run in a
-  second with no server and no network. Do not add a crate to it casually; if one
-  is genuinely needed, say why in the file.
+- **The desktop-only rail tile comes from `desktopPanels(controlMode)`**, never
+  from mutating `PANELS`. `panels.test.ts` proves the two rosters differ only by
+  Control at the head, so the web build keeps its seven tiles and a phone build —
+  which has no second window to pass a click to — gets the same seven.
+- **The updater is opt-out, and the opt-out is not a one-way door.** Rules in
+  `src/lib/updates.ts` with tests: the preference lives under
+  `open-telestrator.updates.notify`, an unreadable value means "tell me", and
+  `shouldPrompt` lets a check the operator asked for through even when
+  announcements are off — that is the way back, from the tray. A check that finds
+  nothing, or cannot reach GitHub, says nothing.
+- **The desktop app is one standalone executable, and there is no installer on
+  any platform.** `bundle.active` is `false`, so `tauri build` leaves
+  `src-tauri/target/release/open-telestrator` and no AppImage, `.deb`, MSI or
+  `.dmg`; there is no signing key to generate or lose, and no `latest.json` to
+  host. That is a deliberate trade, not an omission: nothing installs itself, so
+  a newer version is *news and a link* — the GitHub API's `releases/latest`, with
+  the release page handed to the system's browser through the opener plugin,
+  whose capability allows that one address and nothing else. A phone is left out
+  of the check on purpose (a release carries desktop binaries and an APK would
+  come from a store), which is why `useUpdates` asks `shellMode()` rather than
+  `isDesktop()`.
+- **`src-tauri/media` has exactly one dependency, on purpose.** The RTMP
+  publisher is hand-rolled — AMF0, FLV tag bodies, chunk framing — so its 63 tests
+  run in a few seconds with no server and no network. TLS is the exception and
+  could not be hand-rolled: `rustls` + `webpki-roots`, with `ring` as the crypto
+  provider, are what reach the `rtmps://` ingest that Facebook Live and Instagram
+  publish and nothing else. `src/tls.rs` makes that argument in the file; any
+  *other* crate needs the same before it lands.
 - **The frame wire format lives in two places**: `src/lib/frameHeader.ts` writes it
   and `src-tauri/src/stream.rs` reads it, each pinned by its own tests. Change one
   and the other fails — that is the point, so keep both in step.

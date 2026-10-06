@@ -7,6 +7,7 @@ import {
   type Tool,
   type Stroke,
 } from '../lib/telestration'
+import { isPalm, isStylus, strokeWidth } from '../lib/touch'
 
 /**
  * The telestration canvas laid over the video.
@@ -44,6 +45,9 @@ export function TelestrationOverlay({
   // React re-renders while the pointer is down.
   const draftRef = useRef<Gesture & { id: string } | null>(null)
   const activePointerRef = useRef<number | null>(null)
+  // When a stylus was last seen on this canvas. A hand resting on the glass sends
+  // touches of its own, and those must not become strokes — see `isPalm`.
+  const lastStylusRef = useRef<number | null>(null)
 
   const nextId = useCallback(() => crypto.randomUUID(), [])
 
@@ -86,7 +90,13 @@ export function TelestrationOverlay({
   }, [])
 
   const handlePointerDown = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    if (isStylus(event.pointerType)) lastStylusRef.current = event.timeStamp
+    // One pointer at a time, and a palm is not a pointer: on a tablet the hand
+    // holding the stylus is usually on the screen before the tip is.
     if (activePointerRef.current !== null) return
+    if (isPalm({ pointerType: event.pointerType, lastStylusMs: lastStylusRef.current, now: event.timeStamp })) {
+      return
+    }
     activePointerRef.current = event.pointerId
     try {
       // Keeps receiving move events if the pointer leaves the canvas mid-stroke.
@@ -95,11 +105,21 @@ export function TelestrationOverlay({
       // Some environments (and synthetic/test pointers) reject capture; drawing
       // still works via the element's own event listeners.
     }
-    draftRef.current = { id: nextId(), tool, color, width, points: [toPoint(event)] }
+    draftRef.current = {
+      id: nextId(),
+      tool,
+      color,
+      // How hard the stroke started is how bold it stays: a stylus that presses
+      // harder draws a thicker line, and a finger is left exactly as it was.
+      width: strokeWidth(width, event.pressure),
+      points: [toPoint(event)],
+    }
     render()
   }
 
   const handlePointerMove = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    // Keeps the palm window alive while a stylus hovers over the canvas.
+    if (isStylus(event.pointerType)) lastStylusRef.current = event.timeStamp
     const draft = draftRef.current
     if (activePointerRef.current !== event.pointerId || !draft) return
     const point = toPoint(event)

@@ -51,6 +51,11 @@ pub enum PublishError {
   Connect(String),
   /// Something was connected to, but it is not speaking RTMP.
   Handshake(String),
+  /// The connection was made but could not be encrypted — an `rtmps://` ingest
+  /// whose certificate we would not accept, or whose handshake failed. Never a
+  /// falling back to the clear: an address that asks for TLS gets TLS or an
+  /// error.
+  Tls(String),
   /// The server answered, and said no.
   Rejected(String),
   /// The connection broke before publishing started.
@@ -64,6 +69,7 @@ impl fmt::Display for PublishError {
       PublishError::Handshake(detail) => {
         write!(f, "The ingest server refused the handshake: {detail}")
       }
+      PublishError::Tls(detail) => write!(f, "The encrypted connection failed: {detail}"),
       PublishError::Rejected(detail) => write!(f, "The platform rejected the stream: {detail}"),
       PublishError::Protocol(detail) => write!(f, "The connection dropped during setup: {detail}"),
     }
@@ -167,16 +173,22 @@ pub fn start(url: &RtmpUrl, options: StartOptions) -> Result<Publisher, PublishE
   })
 }
 
-/// Dial the ingest address. TLS is not wired up, so an `rtmps://` address is
-/// refused with an explanation rather than attempted in the clear — silently
-/// downgrading to an unencrypted connection would be the one thing worse than
-/// not connecting.
+/// Dial the ingest address: TLS when the address asks for it, plain otherwise.
+///
+/// An `rtmps://` address is never downgraded to the clear — a platform that
+/// publishes an encrypted ingest only is not reachable without it, and quietly
+/// sending a stream key in the open would be the one outcome worse than failing.
 fn connect(url: &RtmpUrl) -> Result<Box<dyn crate::session::Transport>, PublishError> {
   if url.secure {
-    return Err(PublishError::Connect(
-      "This build cannot speak rtmps yet. Use an rtmp:// ingest address (YouTube offers one)."
-        .into(),
-    ));
+    // Built per connection rather than cached: it is a handful of allocations
+    // beside a DNS lookup and a TLS handshake, and a stream-out happens once.
+    let config = crate::tls::client_config().map_err(|error| PublishError::Tls(error.to_string()))?;
+    return crate::tls::connect(&config, &url.host, url.port, CONNECT_TIMEOUT)
+      .map(|stream| Box::new(stream) as Box<dyn crate::session::Transport>)
+      .map_err(|error| match error {
+        crate::tls::TlsError::Dial(detail) => PublishError::Connect(detail),
+        other => PublishError::Tls(other.to_string()),
+      });
   }
 
   let address = format!("{}:{}", url.host, url.port);

@@ -12,6 +12,9 @@
  * than throwing, because "there is no shell" is the normal case on the web.
  */
 
+import { isMobileUserAgent, type ShellMode } from './touch'
+import { RELEASES_API, isNewer, releaseFromApi, type UpdateState } from './updates'
+
 /**
  * Whether we are inside the desktop shell.
  *
@@ -117,4 +120,102 @@ export async function streamStop(): Promise<void> {
 /** The reason the stream ended, or null while it is healthy. */
 export async function streamFailure(): Promise<string | null> {
   return invoke<string | null>('stream_failure')
+}
+
+// --- which shell -----------------------------------------------------------
+
+/**
+ * Which shell is hosting the studio: a browser, a desktop window, or a phone.
+ *
+ * The user agent is what separates the last two — Tauri injects the same
+ * internals object into both — and `touch.ts` owns the rule.
+ */
+export function shellMode(): ShellMode {
+  if (!isDesktop()) return 'browser'
+  return isMobileUserAgent(navigator.userAgent) ? 'mobile' : 'desktop'
+}
+
+/** The platform and version, for the update prompt's "you have …" line. */
+export async function appVersion(): Promise<string | null> {
+  if (!isDesktop()) return null
+  try {
+    const { getVersion } = await import('@tauri-apps/api/app')
+    return await getVersion()
+  } catch (error) {
+    console.warn('Could not read the app version:', error)
+    return null
+  }
+}
+
+// --- updates ---------------------------------------------------------------
+
+/**
+ * Ask GitHub whether there is a newer release than the one running.
+ *
+ * The app is a standalone executable, so there is nothing to install in place:
+ * a newer version is news and a link, not a download this process performs. See
+ * `RELEASES_API` in `updates.ts` for why the API is asked rather than a signed
+ * manifest.
+ *
+ * `unreachable` covers everything that is not an answer: no shell to ask, no
+ * release published yet, no network. The caller reports it only when the
+ * operator asked for a check — never as a reason to interrupt.
+ */
+export async function checkForUpdate(): Promise<UpdateState> {
+  if (!isDesktop()) return { kind: 'unreachable' }
+  try {
+    // Without a version of our own there is nothing to compare against, and a
+    // prompt offering to "upgrade" to whatever the tag says is worse than quiet.
+    const current = await appVersion()
+    if (!current) return { kind: 'unreachable' }
+
+    const response = await fetch(RELEASES_API, { headers: { Accept: 'application/vnd.github+json' } })
+    if (!response.ok) return { kind: 'unreachable' }
+    const release = releaseFromApi(await response.json())
+    if (!release) return { kind: 'unreachable' }
+    if (!isNewer(release.version, current)) return { kind: 'current' }
+
+    return {
+      kind: 'available',
+      version: release.version.replace(/^v/i, ''),
+      notes: release.notes,
+      url: release.url,
+    }
+  } catch (error) {
+    console.warn('Could not check for a new version:', error)
+    return { kind: 'unreachable' }
+  }
+}
+
+/**
+ * Open the release page in the system's browser — the *only* thing this app does
+ * about a new version. Returns the reason it could not, or null.
+ *
+ * The webview navigates nowhere itself: an address the operator can see, in the
+ * browser they already trust, is the honest way to hand over a binary.
+ */
+export async function openReleases(url: string): Promise<string | null> {
+  if (!isDesktop()) return 'Opening the download page needs the desktop app.'
+  try {
+    const { openUrl } = await import('@tauri-apps/plugin-opener')
+    await openUrl(url)
+    return null
+  } catch (error) {
+    return error instanceof Error ? error.message : String(error)
+  }
+}
+
+/**
+ * Hear the tray's **Check for updates**, which exists because a window in
+ * Control mode cannot be clicked. Returns a no-op unsubscribe in a browser.
+ */
+export async function onUpdateCheckRequested(listener: () => void): Promise<() => void> {
+  if (!isDesktop()) return () => {}
+  try {
+    const { listen } = await import('@tauri-apps/api/event')
+    return await listen('update-check', () => listener())
+  } catch (error) {
+    console.warn('Could not watch for an update request:', error)
+    return () => {}
+  }
 }

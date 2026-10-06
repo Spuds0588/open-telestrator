@@ -21,10 +21,13 @@ import {
   type Stroke,
   type Tool,
 } from './lib/telestration'
-import { isDesktop, onControlMode, setControlMode } from './lib/desktop'
+import { isDesktop, onControlMode, setControlMode, shellMode } from './lib/desktop'
 import { DEFAULT_MODE, bodyClass, type ControlMode } from './lib/controlMode'
 import { useStreamOut } from './lib/useStreamOut'
+import { useUpdates } from './lib/useUpdates'
+import { useLayout } from './lib/useLayout'
 import { Sidebar } from './components/Sidebar'
+import { UpdateNotice } from './components/UpdateNotice'
 import { VideoStage } from './components/VideoStage'
 
 /** Narrow, stable colour handles so the document keydown handler can hand a
@@ -62,9 +65,16 @@ export default function App() {
   const [past, setPast] = useState<Stroke[]>([])
   const [future, setFuture] = useState<Stroke[]>([])
 
-  // The desktop shell brings two things a browser cannot: a window that can
-  // ignore the pointer, and an RTMP socket. Both are inert on the web.
+  // The shell brings things a browser cannot: a window that can ignore the
+  // pointer, an RTMP socket, and news of a newer version. All of them are inert
+  // on the web. `useLayout` sets nothing in a browser either — it exists so that
+  // a phone-shaped shell and an awkward window both get a layout that fits.
   const desktop = isDesktop()
+  useLayout()
+  const updates = useUpdates()
+  // Control mode is a window behaviour, and a phone has no second window to
+  // click through to: the rail simply has no Control tile there.
+  const controlMode = desktop && shellMode() !== 'mobile'
   const [mode, setMode] = useState<ControlMode>(DEFAULT_MODE)
   // Whether the program should be composited for stream-out. Kept separate from
   // the stream's own state because the compositor has to be running *before* the
@@ -422,12 +432,17 @@ export default function App() {
             broadcast={broadcast}
             canBroadcast={selected !== null}
             desktop={desktop}
+            controlMode={controlMode}
             mode={mode}
             onMode={changeMode}
             stream={stream}
           />
         </main>
       </div>
+
+      {/* One line of news from outside: a newer version exists. Only ever on
+          screen inside a shell, and only until it is answered. */}
+      <UpdateNotice update={updates} />
 
       {/* Desktop-only: mobile and tablet viewports get this instead of the app. */}
       <div className="unsupported" data-testid="unsupported-notice">

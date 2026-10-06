@@ -28,7 +28,7 @@ import {
   shortcutLabel,
   type ControlMode,
 } from '../lib/controlMode'
-import { PLATFORMS, STREAM_LABELS, destinationProblem, maskKey, platformFor } from '../lib/streamOut'
+import { PLATFORMS, STREAM_LABELS, destinationProblem, maskKey, platformFor, platformGroups } from '../lib/streamOut'
 import type { StreamOutController } from '../lib/useStreamOut'
 import { PANEL_ICONS, RAIL_STROKE, STREAM_ICON, TOOL_ICONS } from './icons'
 import { AudioControls } from './AudioControls'
@@ -36,6 +36,9 @@ import { MediaTransport } from './MediaTransport'
 import { ReplayControls } from './ReplayControls'
 import { QrModal } from './QrModal'
 import { AddInputModal } from './AddInputModal'
+
+/** The stream-out presets under the headings the picker shows. The roster is static. */
+const STREAM_GROUPS = platformGroups()
 
 /**
  * The controls, on the right of the stage: a rail of every group and one panel
@@ -76,6 +79,7 @@ export function Sidebar({
   broadcast,
   canBroadcast,
   desktop,
+  controlMode,
   mode,
   onMode,
   stream,
@@ -104,8 +108,11 @@ export function Sidebar({
   replay: ReplayController
   broadcast: BroadcastController
   canBroadcast: boolean
-  /** Whether the desktop shell is hosting us: it brings Control mode and stream-out. */
+  /** Whether the desktop shell is hosting us: it brings stream-out and a tray. */
   desktop: boolean
+  /** Whether Control mode exists here: a phone has no second window to click
+   * through to, so the tile is not offered on one. */
+  controlMode: boolean
   mode: ControlMode
   onMode: (mode: ControlMode) => void
   stream: StreamOutController
@@ -162,7 +169,7 @@ export function Sidebar({
     mode,
   }
 
-  const panels = desktopPanels(desktop)
+  const panels = desktopPanels(controlMode)
   const active = panels.find((item) => item.id === panel) ?? null
 
   // The shortcut the shell actually registered on this platform.
@@ -557,10 +564,14 @@ export function Sidebar({
                           if (chosen) stream.setDestination({ ...stream.destination, address: chosen.address })
                         }}
                       >
-                        {PLATFORMS.map((platform) => (
-                          <option key={platform.id} value={platform.id}>
-                            {platform.label}
-                          </option>
+                        {STREAM_GROUPS.map((entry) => (
+                          <optgroup key={entry.group} label={entry.group}>
+                            {entry.platforms.map((platform) => (
+                              <option key={platform.id} value={platform.id}>
+                                {platform.label}
+                              </option>
+                            ))}
+                          </optgroup>
                         ))}
                       </select>
                     </label>

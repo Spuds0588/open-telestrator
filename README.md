@@ -286,37 +286,83 @@ under `/<repo>/`, the workflow sets `VITE_BASE_PATH` to match (local dev stays a
 
 The same studio also runs as a native desktop app, in a [Tauri](https://tauri.app)
 shell that wraps the very bundle GitHub Pages serves — nothing about the UI, the
-compositor or the drawing is forked. It adds the two things a browser cannot do:
+compositor or the drawing is forked. It adds the three things a browser cannot do:
 
 - **Control mode.** In Draw the window takes clicks and you draw on it; in Control
 the whole window stops taking clicks, so the pointer belongs to the video, page
 or application underneath — you see and touch the real thing, not our copy of it.
 Switch with the rail's **Control** panel, `Ctrl/Cmd+Shift+D`, or the tray icon.
+- **News of a newer version.** The app asks GitHub a few seconds after launch
+whether there is a newer
+[release](https://github.com/Spuds0588/open-telestrator/releases), and says so if
+there is — the button opens the release page in your own browser. It ships as one
+standalone executable with no installer, so it never replaces itself: you
+download the new file and run that. If you would rather not be told, the prompt
+has a checkbox that turns the notifications off for good — and the tray's **Check
+for updates** still answers when you ask.
 - **Stream out to RTMP.** Push the program — drawings, corners and all — straight
-to YouTube Live, Twitch or any other RTMP ingest, without a media server or
-`ffmpeg` to install: the app opens the connection itself.
+to YouTube Live, Twitch, Facebook Live, Instagram, Rumble, Trovo, Steam,
+Restream, Mux, BoxCast or any other RTMP ingest, without a media server or
+`ffmpeg` to install: the app opens the connection itself. Both the plain
+`rtmp://` ingest and the encrypted `rtmps://` one work, and the encrypted one is
+the only kind Facebook Live, Instagram and LinkedIn publish. The picker lists
+around thirty services in groups, and **Something else** takes an address that is
+not on it.
 
 ```bash
 npm run desktop        # run it against the dev server
-npm run desktop:build  # bundle it for this platform
+npm run desktop:build  # the standalone executable, in src-tauri/target/release
 ```
+
+There is no installer on any platform: a build leaves one executable — about 6 MB,
+webview included — and running that file *is* the installation. On Linux and macOS
+it wants `chmod +x` first, and a macOS download asks to be allowed once under
+**Privacy & Security**.
+
+The Linux download is the build that has been run and checked. The Windows and
+macOS ones are labelled **beta**: CI builds them on systems nobody has driven the
+app on yet, so expect rough edges there — and on macOS, camera, microphone and
+screen-recording access can be refused outright, because a bare executable
+carries no app bundle for macOS to hang those permissions on.
 
 To go live to a platform: in YouTube Studio, **Create → Go live → Stream**, copy
 the **stream key**, then in the studio open the **Broadcast** panel, pick the
-platform, paste the key and **Stream out**. Use the `rtmp://` ingest address, not
-the `rtmps://` one (`rtmp://a.rtmp.youtube.com/live2` for YouTube,
-`rtmp://live.twitch.tv/app` for Twitch) — `rtmps://` is not implemented yet and
-the app says so if you paste one. The key is kept in the window and never shown
-in full.
+platform, paste the key and **Stream out**. Either ingest address the page shows
+works, plain or encrypted (`rtmp://a.rtmp.youtube.com/live2` or
+`rtmps://a.rtmp.youtube.com/live2` for YouTube, `rtmp://live.twitch.tv/app` for
+Twitch). The key is kept in the window and never shown in full.
+
+Facebook Live and Instagram are in the picker; both publish an encrypted ingest
+only, which is what the app's TLS support is for. LinkedIn Live is not, and
+cannot be a preset: Live Studio issues its address per event, on a channel that
+belongs to your account, so it belongs in **Something else** with what the page
+shows you. Any platform that issues a per-account ingest address, like TikTok,
+belongs there too.
 
 Building from source needs a Rust toolchain, and on Linux the WebKitGTK and GTK
 development packages. See [docs/tauri-desktop.md](docs/tauri-desktop.md) for the
 per-platform prerequisites, what is verified, and what is still to do.
 
+## Android
+
+A phone or tablet build is the next target, and it is *only* the shell that is
+planned rather than the web app: a phone opening the studio in a browser still
+gets the notice pointing at the downloads, because a browser tab cannot capture a
+screen and has no pointer to draw with. Inside the Android app the studio is
+there, laid out for the device — the rail becomes a bar along the bottom, the
+panel a sheet above it, every control at least 44px on its short side, the canvas
+taking the stylus and refusing the palm resting on the glass. The rules for all
+of that are written and tested; the APK is not built yet.
+
+[docs/android.md](docs/android.md) has the plan, the scaffolding commands, and an
+honest list of what is uncertain — screen capture, WebCodecs, and how a stylus
+feels on a WebView canvas.
+
 ## Stack
 
 Vite + React + TypeScript, packaged as an installable PWA (`vite-plugin-pwa`).
 The web build stays shell-agnostic so the Tauri desktop shell wraps the same
-`dist/` output — and so a mobile shell could later. The desktop-only half lives
-in `src-tauri/`, including an RTMP publisher written in Rust with no
-dependencies at all.
+`dist/` output — and so the Android shell can too. The desktop-only half lives in
+`src-tauri/`, including an RTMP publisher written in Rust whose only dependency
+is the TLS stack, and a shell that is a library with a two-line binary in front
+of it so a phone's activity can start the same code.

@@ -1,0 +1,95 @@
+name: Desktop release
+
+# Tag a commit `v0.1.0` — matching `src-tauri/tauri.conf.json`'s `version` — and
+# this builds one standalone executable per platform and files them as a
+# **draft** release. Nothing becomes public until somebody publishes that draft.
+#
+# There are no installers and no signing keys: `tauri build` is configured with
+# `bundle.active: false` (see `tauri.conf.json`), so the artifact is the binary
+# itself. What that costs, and what it means for updates, is written up in
+# `docs/tauri-desktop.md#releasing`.
+#
+# Only the Linux build has been run by a person. Windows and macOS are built by
+# CI on systems nobody has driven the app on, so their assets carry `-beta` in
+# the name and say so in the notes. The label is on the *assets*, not the
+# release: a GitHub pre-release is invisible to `releases/latest`, which is what
+# the app's update check reads, so marking the whole thing beta would silence it
+# for the Linux build too.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    strategy:
+      fail-fast: false
+      # Three jobs, one draft release: `gh release create` from all three at once
+      # is a race, so they take turns. Sequential is slower and always right.
+      max-parallel: 1
+      matrix:
+        include:
+          # A Windows bundle cannot be made on Linux and a macOS one cannot be
+          # made on Windows, so the three platforms are three machines.
+          - platform: ubuntu-22.04
+            asset: Open-Telestrator-linux-x86_64
+            binary: src-tauri/target/release/open-telestrator
+          - platform: windows-latest
+            asset: Open-Telestrator-windows-x86_64-beta.exe
+            binary: src-tauri/target/release/open-telestrator.exe
+          - platform: macos-latest
+            # Apple Silicon. An Intel build is a second runner with
+            # `--target x86_64-apple-darwin`; see docs/tauri-desktop.md.
+            asset: Open-Telestrator-macos-aarch64-beta
+            binary: src-tauri/target/release/open-telestrator
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Linux dependencies
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            build-essential
+
+      - run: npm ci
+
+      # The deploy workflow only runs the web tests, and this is the only place a
+      # Rust change is verified before it reaches people.
+      - name: Web tests
+        run: npm test
+      - name: Rust tests
+        run: cargo test --workspace --manifest-path src-tauri/Cargo.toml
+
+      - name: Build the executable
+        run: npx tauri build
+
+      - name: File it against the release
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          cp "${{ matrix.binary }}" "${{ matrix.asset }}"
+          gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" \
+            --draft \
+            --title "Open Telestrator $TAG" \
+            --notes "One standalone executable per platform: download it, chmod +x on Linux and macOS, and run it. Nothing is installed and nothing is left behind.
+
+          **Linux (x86_64)** — the build that has been run and checked.
+
+          **Windows (x86_64) — beta** and **macOS (Apple Silicon) — beta** — built by CI on systems nobody has driven the app on yet, so expect rough edges. The macOS download is a bare executable with no app bundle, which is what lets macOS refuse camera, microphone and screen-recording access without a dialog; see docs/tauri-desktop.md. Please report what breaks."
+          gh release upload "$TAG" "${{ matrix.asset }}" --clobber

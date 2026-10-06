@@ -14,10 +14,13 @@
     "desktop:web:dev": "vite --mode desktop",
     "desktop:web:build": "npm run typecheck && vite build --mode desktop",
     "desktop:build": "tauri build",
+    "android": "tauri android dev",
+    "android:build": "tauri android build",
     "clean": "rm -rf dist dev-dist coverage node_modules/.vite node_modules/.vitest *.tsbuildinfo"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.12.1",
+    "@tauri-apps/plugin-opener": "^2.7.0",
     "hls.js": "^1.7.3",
     "lucide-react": "^1.52.0",
     "peerjs": "^1.5.5",

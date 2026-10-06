@@ -1,21 +1,28 @@
 # Desktop build (Tauri)
 
-Status: **built and verified on Linux**. The shell runs, Control mode works, and
-the program goes out to an RTMP platform. What is not done yet is packaging
-(signing, notarisation, the updater) and `rtmps://`; both are listed under
-*What is left*.
+Status: **built and verified on Linux**, as a standalone executable. The shell
+runs, Control mode works, the program goes out to an RTMP platform — plain
+`rtmp://` or encrypted `rtmps://` — and a newer version is announced with a link
+to the release page, with an opt-out. What a *release* still needs is a Windows
+and a macOS machine to build on, listed under *What is left*.
 
 ```bash
 npm run desktop        # dev: vite + the shell, with hot reload in the webview
-npm run desktop:build  # a signed-less bundle for the current platform
+npm run desktop:build  # the standalone executable for the current platform
+npm run android        # the phone build — see docs/android.md
 ```
+
+There are **no installers**, by choice: `bundle.active` is `false`, so
+`tauri build` leaves `src-tauri/target/release/open-telestrator` and nothing
+else. Downloading that file and running it *is* the installation, and the update
+path is the same one — get the newer file and run that.
 
 The web app is untouched: `npm run build` still produces the GitHub Pages
 bundle, and its tests still prove it.
 
 ## What the shell adds
 
-Two things a browser cannot do, and nothing else.
+Three things a browser cannot do, and nothing else.
 
 1. **A window that can ignore the pointer.** In *Draw* mode the window takes
    clicks and the canvas draws — what the web app has always done. In *Control*
@@ -25,23 +32,32 @@ Two things a browser cannot do, and nothing else.
    the desktop build has) is where it lives.
 2. **An RTMP socket.** A webview has no RTMP API, so Rust owns the connection
    and pushes the program to a platform such as YouTube Live.
+3. **A way to hear about a new version.** The app asks the GitHub API once,
+   shortly after launch, and says so when there is one — with a button that
+   opens the release page in your own browser, not a download it performs itself.
+   See *A newer version*.
 
 ## The shape of it
 
 ```
 src-tauri/
   Cargo.toml           workspace root; media/ is a member
-  tauri.conf.json      one window, transparent, loading app.html
-  capabilities/        core:default + core:event:default
-  src/main.rs          bootstrap, tray, global shortcut
+  tauri.conf.json      one window, transparent, loading app.html, and
+                       `bundle.active: false` — a build makes one executable
+  tauri.android.conf.json  one plain window; see docs/android.md
+  capabilities/        core:default + core:event:default, plus the one address
+                       the opener may hand to the system's browser
+  src/lib.rs           bootstrap, tray, global shortcut, the opener plugin
+  src/main.rs          two lines: calls lib.rs's run()
   src/control.rs       draw <-> control, and the one window call behind it
   src/stream.rs        the stream-out commands, and the frame wire format
-  media/               RTMP publisher — no dependencies at all
+  media/               RTMP publisher — TLS is its only dependency
     src/amf0.rs        AMF0, only the types RTMP commands use
     src/flv.rs         FLV tag bodies: H.264, AAC, onMetaData
     src/chunk.rs       RTMP chunk framing, both directions
     src/timing.rs      the encoder's clock onto the wire's clock
     src/url.rs         ingest address + key -> host, app, stream name
+    src/tls.rs         the encrypted socket, for an rtmps:// ingest
     src/session.rs     one connection: handshake, commands, the frame pump
     src/publisher.rs   the handle the app holds, and its status
 ```
@@ -53,9 +69,13 @@ src/lib/desktop.ts       the only place that knows it is in a shell
 src/lib/controlMode.ts   the mode rules, with tests
 src/lib/streamOut.ts     destinations, the form's validation, key masking
 src/lib/encoder.ts       which codecs and bitrate to ask for, with tests
-src/lib/programEncoder.ts the WebCodecs pipeline
+src/lib/programEncoder.ts the WebCodecs pipeline, imported on demand
 src/lib/useStreamOut.ts  the controller the studio drives
 src/lib/frameHeader.ts   the frame wire format, mirrored in stream.rs
+src/lib/updates.ts       version comparison, release notes, the opt-out, with tests
+src/lib/useUpdates.ts    the announcement the studio drives
+src/lib/touch.ts         phones, tablets, styluses, awkward viewports, with tests
+src/lib/useLayout.ts     keeps the body's layout attributes true
 ```
 
 ### One window, not two
@@ -121,44 +141,265 @@ the canvas is still blank would send the platform a few seconds of nothing.
   from a different origin. A player handed a timestamp earlier than the last one
   either stalls or jumps.
 
+## The platform presets
+
+`src/lib/streamOut.ts` holds the ingest addresses the picker offers, grouped by
+what the platform is for: live platforms, regional ones, sport/worship/events,
+and restream and pro-video services. Its tests hold three rules, so a preset that
+breaks one fails `npm test` rather than shipping:
+
+1. **A scheme the publisher can dial.** Both plain `rtmp://` and encrypted
+   `rtmps://` are accepted now that the TLS half exists, so Facebook Live and
+   Instagram — which publish an encrypted ingest and nothing else — are in the
+   list. A preset may still not point at something the publisher cannot reach at
+   all, like an `http://` page.
+2. **One address for everybody, and a host plus one path segment.** Amazon IVS
+   issues each channel its own ingest subdomain, TikTok issues a per-region host
+   and LinkedIn Live issues a per-event address on a channel that belongs to the
+   account (`<channel>.channel.media.azure.net:2935/live/<key>`), so none can be
+   guessed for you — all three are left to **Something else**, where you paste
+   what the dashboard gave you. niconico is out for the same family of reason:
+   its fixed `/live/input` would arrive as an application plus a stream name,
+   because this form and `media/src/url.rs` both read the first path segment as
+   the application and the rest as the stream name.
+3. **No adult services.** A telestrator is used next to a pitch or a court.
+
+No preset carries a key — `address` is the platform's and `key` is always yours.
+The addresses are the ones the services publish themselves, most of them
+cross-checked against the maintained list OBS ships. They have *not* each been
+connected to here: without an account on each service there is no way to test
+them, and a stale address fails exactly the way a mistyped one does — the
+publisher reports the rejection and the panel shows it.
+
+## Encrypted ingests
+
+Facebook Live, Instagram and LinkedIn publish their ingest over TLS and nothing
+else, so `rtmps://` is the difference between three of the platforms people
+actually stream to and a picker that cannot reach them.
+
+`media/src/tls.rs` is the whole of it, and it is the one place this crate takes a
+dependency (`rustls` and `webpki-roots`, with `ring` as the crypto provider so a
+builder needs a C compiler and nothing more). The transport was already behind
+the `Transport` trait, so this is a wrapper rather than a rewrite — but the
+wrapper is not the naive one, because a TLS record cannot be interrupted halfway
+and resumed later, and the pump reads on a short timeout so it can alternate with
+writing frames. Instead the socket's read side belongs to a **dedicated reader
+thread** that blocks on it with no timeout and hands decrypted bytes over a
+channel; the pump's `read` waits on that channel for its timeout and reports
+`WouldBlock` when it is empty, which is exactly what it already expected from a
+plain socket. Writes stay inline on the pump's thread, because two writers would
+interleave TLS records. The `ClientConnection` is shared behind a mutex, and no
+blocking socket call is ever made while holding it.
+
+Nothing is ever downgraded: an `rtmps://` address gets TLS or an error, and a
+certificate that does not verify is reported as its own failure rather than
+connected to.
+
+## A newer version
+
+The app asks the GitHub API once, a few seconds after launch, whether there is a
+newer release than the one running. A newer version is news and a link — never a
+download this process performs:
+
+```text
+api.github.com/…/releases/latest ──► tag_name + body + html_url
+                                            │
+                       isNewer(tag, running)│
+                                            ▼
+                              the prompt, with a link
+```
+
+**The API, not the updater plugin's signed manifest.** The plugin installs
+*bundles*: on Windows it runs the NSIS or MSI installer, on Linux it renames the
+running AppImage aside and unpacks, or reaches for `pkexec`, and on macOS it
+replaces the `.app` from a tarball. A standalone executable has nothing for any
+of that to act on — and a signature exists to protect an install that does not
+happen here — so the check is one unauthenticated `GET` and the answer is a
+version, some notes and a URL. `RELEASES_API` and `releaseFromApi` in
+`src/lib/updates.ts` are the whole of it; the request itself is
+`checkForUpdate` in `src/lib/desktop.ts`.
+
+The endpoint is `api.github.com/repos/Spuds0588/open-telestrator/releases/latest`.
+Unauthenticated it is rate-limited to 60 requests an hour per address, which one
+check per launch never approaches, and the response carries
+`Access-Control-Allow-Origin: *`, so it needs no proxy and no plugin. Two things
+the API does for us: a **draft** release is not returned at all, and a tag that
+is not a version is read as nothing (`releaseFromApi` refuses both), so nothing
+is ever announced that cannot be named.
+
+**Nothing is downloaded by the app.** *Get the new version* hands the release's
+`html_url` to the system browser through `tauri-plugin-opener` — which works on a
+phone too, the other build with no browser chrome of its own — and the capability
+in `src-tauri/capabilities/default.json` allows exactly one address shape, this
+project's releases. The operator gets to see the page, the asset names and
+whatever the release says about them before anything runs on their machine, which
+is the honest shape of a standalone download.
+
+### The opt-out
+
+An update prompt is an interruption, and people have strong feelings about being
+interrupted, so there is a checkbox in the prompt itself: *Do not tell me about
+new versions*. It is remembered in `localStorage` under
+`open-telestrator.updates.notify` and it survives restarts.
+
+What it switches off is **being told**, not **asking**: the tray's **Check for
+updates** answers whether or not the box is ticked, and so opens the prompt with
+the box in it — untick it and announcements come back. That is the whole way back,
+which is what keeps the checkbox from being a trap. The rules are in
+`src/lib/updates.ts` (`shouldPrompt`, `readMuted`, `writeMuted`) with tests, and
+nothing in them needs a shell or a network to be reasoned about.
+
+The prompt is hidden in Control mode, because a window that ignores the pointer
+cannot be clicked — which is also why the check is reachable from the tray.
+
+### What it says when there is nothing to say
+
+Nothing. A check that finds nothing is silent, as is one that cannot reach the
+API (no network, or no release published yet — a 404 is the answer until the
+first tag). Only a check the operator asked for reports either answer, and it
+says so in one line for a few seconds. An app that nags about having nothing to
+say is an app people switch off.
+
+## Releasing
+
+`.github/workflows/desktop-release.yml` builds the three platforms and files a
+**draft** release when a `v*` tag is pushed:
+
+```bash
+git tag v0.1.0 && git push origin v0.1.0
+```
+
+The tag has to match `version` in `src-tauri/tauri.conf.json` — that is the
+number a running copy compares itself against. The workflow runs the web tests
+and the Rust tests first, then `npx tauri build` on each of `ubuntu-22.04`,
+`windows-latest` and `macos-latest`, copies the binary to a per-platform asset
+name and uploads it with `gh release upload --clobber`. The draft is published
+by hand.
+
+### Only the Linux build is labelled as verified
+
+| asset | |
+| --- | --- |
+| `Open-Telestrator-linux-x86_64` | the build that has been run and checked |
+| `Open-Telestrator-windows-x86_64-beta.exe` | beta — built by CI, never run by a person |
+| `Open-Telestrator-macos-aarch64-beta` | beta — as above, and see the TCC caveat under *Signing* |
+
+Nothing about the code differs between the three; what differs is how much of it
+somebody has watched work. Linux is the machine the shell was developed and
+driven on. Windows and macOS are built by a runner nobody has sat at, so they are
+handed out as beta, in the filename and in the release notes.
+
+That label is on the **assets**, never on the release. GitHub's `releases/latest`
+— the endpoint the app's update check reads — skips drafts *and* pre-releases, so
+flagging the whole release as a pre-release would silence the update notice for
+the Linux build as well. A beta asset in a normal release is the only shape that
+says "treat this one carefully" without saying "ignore the release". The notes
+are what the prompt shows, so they carry the same warning.
+
+**No secrets, and nothing to set up first.** There is no signing key to supply
+and no `latest.json` to write: the artifact is the executable itself, and the
+release the API returns already carries the version and the notes the prompt
+shows. The only thing the workflow needs is the `GITHUB_TOKEN` every Actions run
+has anyway, with `contents: write` to file the release.
+
+Three things about the draft:
+
+- **A draft is invisible to the API.** `releases/latest` only answers for a
+  published release, and `releaseFromApi` filters a `draft` out again, so
+  running copies see nothing until somebody publishes. Test the draft, then
+  publish it.
+- **`max-parallel: 1` is deliberate.** Three jobs each do `gh release view … ||
+  gh release create`, and two of them creating at once is a race. Sequential is
+  slower and always right.
+- **`fail-fast: false`**, so one platform failing still leaves the other two
+  uploaded, which is what makes a partial release diagnosable rather than
+  invisible.
+
+### Signing, per platform
+
+Nothing here is needed for a build to *work*, and none of it is done here. What
+it changes is what the operating system says the first time somebody runs the
+file — and on macOS it is more than a warning.
+
+**Windows — SmartScreen.** An unsigned `.exe` runs, and shows *"Windows
+protected your PC"* until enough people have downloaded that exact file; **More
+info → Run anyway** gets past it. A code-signing certificate (an OV one is
+enough; since 2024 an EV one buys no extra reputation) is the fix, and it signs
+the binary itself rather than an installer — which also means there is no
+`bundle.windows` block for it to go in any more, just `signtool` against the
+asset on the runner, with the certificate imported into `Cert:\CurrentUser\My`
+first. A `.pfx` (base64 in a `WINDOWS_CERTIFICATE` secret, with its password) or
+Azure Trusted Signing are the two usual ways in. None of it is wired up: it needs
+the certificate to exist first.
+
+**macOS — Gatekeeper, and a real caveat.** An unsigned download from the internet
+is quarantined, and the operator has to allow it once under **Privacy &
+Security**. A *Developer ID Application* certificate plus notarisation is the fix.
+This is also where skipping the bundle costs something real, and it is worth
+writing down plainly: macOS hangs TCC permissions — camera, microphone, **screen
+recording** — on a *bundle* with the right `Info.plist` usage strings. A bare
+executable ships no such bundle, so the first `getUserMedia` or `getDisplayMedia`
+may be refused with no dialog to approve. Those are the app's two inputs, so on
+macOS the standalone build is the least certain of the three. If it bites, the
+fix is to assemble a minimal `.app` around the binary — an `Info.plist` with
+`NSCameraUsageDescription` and `NSMicrophoneUsageDescription`, and the icons — and
+zip *that*: a packaging change, not a code one, and the reason this desktop build
+is still only *verified on Linux*.
+
+**An Intel macOS build.** `macos-latest` is Apple Silicon, so today's matrix
+produces one macOS build for ARM Macs. An Intel build means a second macOS job
+with `--target x86_64-apple-darwin` (plus `rustup target add x86_64-apple-darwin`),
+or a universal build with `--target universal-apple-darwin`. It is left out
+deliberately: a second macOS job doubles the macOS assets without doubling the
+people who want them, and the two would need distinct asset names before they
+could sit side by side in one release.
+
+**Android.** A signed APK/AAB needs a keystore and `tauri android init` first;
+[docs/android.md](android.md#what-is-missing) has the list.
+
 ## What is left
 
-- **`rtmps://`.** Only plain `rtmp://` is implemented. That is not a
-  compromise for YouTube or Twitch, which both publish a plain ingest address,
-  but Facebook Live only offers `rtmps://` and is therefore not listed as a
-  platform. The transport is behind the `Transport` trait in
-  `media/src/session.rs`, so a TLS stream is a wrapper rather than a rewrite —
-  but note that rustls plus a read timeout is a known state-corruption trap, so
-  that work should move the pump to a dedicated reader before it lands.
 - **More than one destination at a time.** One publisher at a time, by design:
   a second destination would need a second encoder, and the program is one
   picture. Restreaming to several platforms at once is a different feature.
-- **Packaging.** `npm run desktop:build` produces an AppImage and a `.deb`. A
-  Windows build needs an NSIS/MSI target and a code-signing certificate; macOS
-  needs a `.dmg`, notarisation and the hardened runtime; the updater plugin
-  points at GitHub Releases. None of that is wired up, so there is nothing to
-  download from the landing page yet.
+- **A Windows and a macOS build, and the signing that goes with them.** The
+  release workflow is in place and makes both; what is not is a code-signing
+  certificate for Windows (an unsigned binary warns at SmartScreen) and, for
+  macOS, a Developer ID and notarisation. The macOS one is more than a warning,
+  because a bare executable has no bundle for TCC to hang a camera or a screen
+  recording grant on — see *Signing, per platform*. Neither can be done from
+  here, and if the macOS caveat bites it is a packaging change, not a code one.
+- **An APK for phones and tablets.** Config, layout and stylus rules are in
+  place; the generated Android project is not, because this machine has no JDK,
+  SDK or NDK. [docs/android.md](android.md) is the plan and the list of what is
+  uncertain about it.
 - **Capture hardening.** `getDisplayMedia` works on WebView2 and WKWebView (after
-  the Screen Recording grant) and is unreliable on WebKitGTK. If a webview cannot
-  capture, the fallback is Rust-side capture feeding a
-  `MediaStreamTrackGenerator`. Not built; the per-platform measurement is not
-  done either.
-- **Opening a video file** should use a real file dialog and the asset protocol so
-  a large file streams from disk rather than being read into memory. The web path
-  is unchanged for now.
-- **The encoder is in the main bundle.** `programEncoder.ts` is only imported by
-  `useStreamOut.ts`, which the studio always loads, so the desktop-only encoder
-  code sits in the studio chunk — and, for now, so does its presence in the web
-  build's chunk graph. It is dead there (nothing calls it when `isDesktop()` is
-  false) but it is not split out. Worth a dynamic import.
+  the Screen Recording grant), is unreliable on WebKitGTK, and is absent from
+  Android's WebView. If a webview cannot capture, the fallback is Rust-side
+  capture feeding a `MediaStreamTrackGenerator`. Not built; the per-platform
+  measurement is not done either.
+- **A real file dialog for an opened video.** Opening a file still reads it into
+  memory through the browser path rather than streaming it from disk through
+  Tauri's asset protocol, which is what a large file wants.
 
 ## Verified how
 
-- `cargo test -p telestrator-media` — 59 tests, no dependencies, no server: AMF0,
-  FLV, chunk framing (both directions, including extended timestamps and a chunk
-  size that changes under the reader), URL parsing, timestamp rebasing, and the
-  whole handshake and command sequence driven against an in-memory socket.
-- `cargo test -p open-telestrator` — the frame wire format the shell parses.
+- `cargo test -p telestrator-media` — 63 tests, no server: AMF0, FLV, chunk
+  framing (both directions, including extended timestamps and a chunk size that
+  changes under the reader), URL parsing, timestamp rebasing, and the whole
+  handshake and command sequence driven against an in-memory socket.
+- **TLS against a real TLS peer.** The encrypted transport is tested against a
+  server this test starts on loopback: a certificate authority generated in the
+  test, a leaf for `localhost`/`127.0.0.1`, and rustls on the far side speaking
+  just enough RTMP to accept a publish. One test drives a complete publish
+  through it — handshake, `connect`, `createStream`, `publish`, metadata, both
+  sequence headers and frames — and asserts the server saw the commands in order
+  and each tag after the header that has to precede it. Another points the same
+  client at the same server with the build's real roots and asserts the
+  certificate is *refused*, and that nothing was published to it.
+- `cargo test --workspace` — 68 tests: the 63 above plus the shell's 5, which
+  pin the frame wire format it parses. `cargo test -p open-telestrator` runs the
+  shell's own five on their own.
 - **End to end against a real RTMP server.** The publisher was pointed at
   `ffmpeg` acting as an RTMP listener and fed real H.264 and AAC extracted from a
   fixture; ffmpeg accepted the publish and muxed it —
@@ -174,25 +415,80 @@ the canvas is still blank would send the platform a few seconds of nothing.
   Result: h264 320x240 30fps and aac 44100 mono, 60 frames, 2.04 s — the
   handshake, `connect`, `createStream`, `publish`, the metadata tag, both
   sequence headers and every frame arrived intact.
-- **The shell boots.** The window exists at 1440x900 titled "Open Telestrator",
-  the tray icon is created, and a captured frame of it has content (average luma
-  16 with a maximum of 235 — the app's own background and its text, not a blank
-  window).
+- **The shell boots.** The window exists at 1440x900 titled "Open Telestrator"
+  and the tray icon is created; the frame measurement is under *The executable
+  was built* below. The only thing it logs on the way up is
+  libayatana-appindicator's deprecation warning.
 - **The web build is unchanged**: seven rail tiles, no Control tile, no Stream out
   section, no emoji, opening on the Input panel.
+- **The update rules are unit-tested** (`src/lib/updates.test.ts`, 24 tests):
+  which version counts as newer (`0.10.0` beats `0.9.0`, an unreadable tag beats
+  nothing), that a pre-release is not an upgrade to the release of the same
+  number, that release notes are flattened and cut, that the opt-out survives a
+  restart and reads anything unrecognised as "tell me", that a muted operator is
+  still answered when they ask, and that a draft, a non-object or a tag that is
+  not a version is read as nothing at all. Both endpoints are pinned to this
+  repository.
+- **The touch rules are unit-tested** (`src/lib/touch.test.ts`, 16 tests): phone
+  against tablet against desktop from real user agents, the layout for the
+  awkward viewports listed in [docs/android.md](android.md#viewports-nobody-designed-for),
+  the rail/panel pairing, stylus pressure, and palm rejection both ways.
+- **The executable was built, and run, with no `dist/` on disk.**
+  `npm run desktop:build` leaves one file —
+  `src-tauri/target/release/open-telestrator`, 6,284,680 bytes (≈6.3 MB) with the
+  opener plugin compiled in — and nothing else: no AppImage, no `.deb`, no
+  `bundle/` directory at all, no install directory. The earlier bundle cache was
+  deleted before that build, so the absence of one afterwards is what the run
+  produced rather than what a previous run left behind. Running that file out of
+  `target/release`, after `npm run clean` had deleted `dist/`, opens the studio
+  at 1440×900 with a tray icon, and a frame captured from the screen measures
+  average luma 16 with a maximum of 235 — the app's own background and its text,
+  not a blank window. That is the proof the frontend is embedded and the binary
+  is genuinely self-contained. What it does not prove is a Windows or a macOS
+  build, which this machine cannot make. See *Releasing*.
+- **The update prompt was driven in a browser**, with only the shell's IPC
+  stubbed: a release payload for `0.2.0` against a running `0.1.0` puts the
+  prompt on screen with the version, the current version and the notes read from
+  the payload; *Get the new version* calls the opener with the release's own
+  `html_url` and nothing else; ticking the opt-out writes
+  `open-telestrator.updates.notify=off`, leaves the prompt up (so it can be
+  unticked), and silences the next launch; and the tray's event brings the prompt
+  back for a muted operator. What that does **not** prove is the API call itself
+  — a real request needs the real shell and a published release, and the first
+  tag is where that gets proved.
+- **The mobile layout was driven in a browser at phone and tablet sizes**, with
+  the shell stubbed and the body laid out by the same hook the shell uses: the
+  rail moves to the bottom bar, the panel becomes a sheet, the controls grow to
+  44px, and the notice is replaced by the studio. Measured at 320×568, 390×844,
+  568×320, 820×1180, 1024×600 and 1180×820; the two things the measurements
+  changed were the sheet's height (a percentage of an auto-height parent is
+  circular) and the rail's tiles, which now shrink to 44px so seven of them fit a
+  phone.
+- **A stylus and a palm were driven on the real canvas** by dispatching pointer
+  events at the component: a pen at pressure 0.9 draws a 10px line where a pen at
+  0.1 draws 4px (the configured width is 6), a touch arriving inside the palm
+  window after a pen draws nothing at all, and the same touch two seconds later
+  draws at the neutral width. The APK itself is not built — see
+  [docs/android.md](android.md#what-is-missing).
+- **The platform presets have not been dialled.** Facebook Live's address comes
+  from the list OBS maintains; Instagram's from two independent sources, since
+  OBS does not carry it. Without an account on each service there is no way to
+  complete a real publish, so these are checked as addresses and as shapes, not
+  as live connections.
 
 ## Setting it up on a new machine
 
-To *run* a build: nothing. There is no server to install — Rust opens the RTMP
-connection itself — which is why this design was chosen over bundling a media
-server and ffmpeg.
+To *run* a build: nothing at all. The desktop app is one executable — download
+it, `chmod +x` on Linux and macOS, run it — and there is no server to install,
+because Rust opens the RTMP connection itself. That is why this design was
+chosen over bundling a media server and `ffmpeg`.
 
 To *build* it:
 
 | | needs |
 | --- | --- |
 | Linux | `libwebkit2gtk-4.1-dev`, `libgtk-3-dev`, `libayatana-appindicator3-dev`, `librsvg2-dev`, `build-essential`, plus Rust (1.77+) |
-| Windows | WebView2 (present on Windows 11; the installer ships it otherwise), the MSVC toolchain, Rust |
+| Windows | WebView2 (present on Windows 11; otherwise the evergreen runtime from Microsoft), the MSVC toolchain, Rust |
 | macOS | Xcode command line tools, Rust |
 
 Then:
@@ -205,17 +501,28 @@ npm run desktop:build
 And to go live to a platform:
 
 1. In YouTube Studio, **Create → Go live → Stream**, and copy the **Stream key**.
-2. Use the `rtmp://` ingest address the page also shows, not the `rtmps://` one —
-   `rtmp://a.rtmp.youtube.com/live2`. Twitch is `rtmp://live.twitch.tv/app`.
-   (The app says so itself if you paste an `rtmps://` address.)
+2. Either ingest address the page shows works — `rtmp://a.rtmp.youtube.com/live2`
+   or the encrypted `rtmps://a.rtmp.youtube.com/live2`. Twitch is
+   `rtmp://live.twitch.tv/app`. Facebook Live and Instagram are in the picker and
+   hand you an encrypted address; LinkedIn Live issues its address per event, so
+   paste it into **Something else**.
 3. In the studio, open the **Broadcast** panel, pick the platform, paste the key,
    and **Stream out**. The key is kept in the window and never shown in full.
 
-Nothing else is needed to finish the setup. Two things to know:
+To *release* one: tag it. There is nothing to set up first — no signing key, no
+repository secret, no manifest to host. The workflow builds the three platforms
+and files a draft release; see *Releasing*.
+
+Three things to know:
 
 - **The global shortcut may be taken.** If `Ctrl/Cmd+Shift+D` is already bound by
   another application, the shell logs it and you come back out of Control mode
   with the tray icon instead.
-- **The stream key is sent over the connection as-is.** Plain RTMP is
-  unencrypted, which is what YouTube and Twitch both expect on their plain
-  ingest; `rtmps://` is the encrypted one and is the work listed above.
+- **The stream key is sent over the connection as-is.** On a plain `rtmp://`
+  ingest that means it crosses the network unencrypted, which is what YouTube and
+  Twitch expect on that address; on an `rtmps://` ingest the whole connection is
+  under TLS, key included.
+- **The first launch may prompt about updates and find nothing.** Until a release
+  is published the API answers 404, and the app stays quiet about it. Ticking
+  *Do not tell me about new versions* is silent too — nothing is reported until
+  there is an answer worth reporting.
