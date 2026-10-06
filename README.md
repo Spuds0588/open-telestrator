@@ -351,8 +351,13 @@ gets the notice pointing at the downloads, because a browser tab cannot capture 
 screen and has no pointer to draw with. Inside the Android app the studio is
 there, laid out for the device — the rail becomes a bar along the bottom, the
 panel a sheet above it, every control at least 44px on its short side, the canvas
-taking the stylus and refusing the palm resting on the glass. The rules for all
-of that are written and tested; the APK is not built yet.
+taking the stylus and refusing the palm resting on the glass.
+
+The first APK is built, installed and driven on a tablet: the studio comes up
+instead of the notice, the rail moves to the bottom, and a finger draws. It is a
+**debug** build, signed with the Android debug key, so it sideloads onto a device
+but cannot go on Play and cannot be upgraded in place. A signed release needs a
+keystore, which is the one thing still missing.
 
 [docs/android.md](docs/android.md) has the plan, the scaffolding commands, and an
 honest list of what is uncertain — screen capture, WebCodecs, and how a stylus

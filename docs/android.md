@@ -1,15 +1,22 @@
 # Android phones and tablets
 
-Status: **planned and partly built, not built into an APK yet.** The shell is
-already split so that Android can start it, the layout and stylus rules exist with
-tests, and the config override is in place. What is missing is the generated
-Android project, which needs a toolchain this machine does not have (see *What is
-missing*). Nothing here claims an APK exists.
+Status: **built, installed and driven on an emulated tablet.**
+`src-tauri/gen/android` is committed, the shell compiles for
+`aarch64-linux-android`, and a debug APK of the studio runs: the studio replaces
+the notice, the rail moves to the bottom on a phone-shaped viewport, and a finger
+draws a stroke. What is still missing is a keystore — so the artifact is
+debug-signed and cannot go on Play — and anything measured on *real* hardware
+rather than an emulator.
 
 ```bash
 npm run android        # tauri android dev — needs the SDK, the NDK and a device
 npm run android:build  # tauri android build — APK + AAB
 ```
+
+The toolchain these were built with, on a machine that had none: JDK 17 (Temurin),
+Android SDK with `platforms;android-37.0` and `build-tools;37.0.0`, and NDK
+`29.0.13846066` — the version the Tauri CLI looks for. `ANDROID_HOME`, `JAVA_HOME`
+and `NDK_HOME` are what `tauri android` reads; nothing else has to be set.
 
 ## What a phone gets, and what it does not
 
@@ -98,6 +105,7 @@ src-tauri/src/lib.rs             `run()` with #[mobile_entry_point] — what an 
 src-tauri/tauri.android.conf.json one plain window, minSdkVersion 24
 src-tauri/capabilities/default.json  core + events, and the release URL the opener
                                      may open — valid on every target
+src-tauri/gen/android/           the Gradle project the APK is built from
 ```
 
 The shell had to become a library with a two-line binary (`src-tauri/src/lib.rs`
@@ -106,73 +114,67 @@ activity can call. The desktop build is unchanged by that — `main.rs` calls
 `run()` and does nothing else — and `cargo test --workspace` still covers both
 members.
 
-## What is missing
+`tauri android init` writes `src-tauri/gen/android` once, and it is committed and
+edited like any other source. It carries the application id, the icons, the
+`minSdkVersion` our config asks for, and — the one thing the generator does not do
+for us — the camera and microphone permissions:
 
-The scaffolding command has **not** been run, because this machine has no JDK and
-no Android SDK/NDK (`java` is not installed, `ANDROID_HOME` is unset). On a
-machine that has them:
-
-```bash
-# one-off: JDK 17, the Android SDK and the NDK, then
-npm run tauri android init      # generates src-tauri/gen/android (commit it)
-npm run android                 # dev build on an attached device
-npm run android:build           # release APK + AAB
+```xml
+<uses-permission android:name="android.permission.CAMERA" />
+<uses-permission android:name="android.permission.RECORD_AUDIO" />
+<uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
 ```
 
-`tauri android init` writes `src-tauri/gen/android` — a Gradle project with the
-application id, the icons and the signing config. It is generated once and
-committed, and it is what the AAB is built from. The bits it needs from us are
-already in place: `tauri.android.conf.json`, the `[lib]` target, and a
-capability that is valid on Android.
+It should not guess at them on our behalf, but they are not optional: wry asks
+for them at runtime from `RustWebChromeClient.onPermissionRequest` when the page
+calls `getUserMedia`, and a permission the manifest does not declare is refused
+before any dialog can appear — so without these three lines the studio opens a
+camera and gets nothing. The two `uses-feature` entries beside them are
+`required="false"`, so the APK stays installable on a device that has neither.
 
-Beyond the scaffold, the honest list of what a first APK still needs:
+## What the first APK still needs
 
-1. **A keystore** and the signing config in the generated project. Without it the
-   build produces a debug-signed APK, which cannot go on Play and cannot be
-   upgraded in place.
-2. **A camera path that suits a phone.** Today the operator adds the host's
-   cameras (`getUserMedia`) or a screen capture (`getDisplayMedia`). The camera
-   path is the one that works on a phone; the screen-capture button should be
-   hidden in the mobile shell rather than offered and refused.
-3. **An icon set and a store listing.** `src-tauri/icons` has the desktop sizes;
-   Android needs the adaptive layer set that `tauri icon` generates.
-4. **The rail's bottom bar measured on hardware.** The layout rules are tested,
-   but the sizes a thumb actually reaches are a matter of holding the device:
-   the bar is 56px tiles today and the panel sheet takes at most 52% of the
-   height.
+1. **A keystore**, with the signing config in the generated project. Without it
+   the build produces a debug-signed APK: installable by sideload, but it cannot
+   go on Play and it cannot be upgraded in place, because the next key would not
+   match. The debug build is also large — an unstripped arm64 library is most of
+   a 138 MB APK, where a stripped release is a fraction of that.
+2. **The screen-capture control, hidden in the mobile shell.** This is no longer a
+   guess: the shell's WebView reports `getDisplayMedia` as absent. The control
+   currently offers a capability the platform does not have, and should not be
+   drawn at all.
+3. **The rail's bottom bar measured on hardware.** The layout rules are tested, and
+   the emulated tablet put the rail along the bottom with 65px tiles, but the
+   sizes a thumb actually reaches are a matter of holding the device.
 
 ## What is uncertain
 
-- **Screen and camera capture inside Android WebView.**
-  `navigator.mediaDevices.getDisplayMedia` is not implemented in Android WebView
-  (it is a Chrome-for-Android API), and `getUserMedia` needs the runtime camera
-  and microphone permissions declared in the generated project. The camera is the
-  path to build on; the screen capture is not, so the mobile shell should say so
-  instead of failing quietly.
-- **WebCodecs.** Stream-out encodes with `VideoEncoder`/`AudioEncoder`. Android's
-  WebView is updatable and recent versions carry WebCodecs, but whether a given
-  device has a hardware H.264 encoder reachable from `VideoEncoder` is a
-  measurement, not a promise. The encoder hook already reports a failure rather
+- **The `desktop` cfg on Android — settled, and it found something.** The shell
+  compiles for `aarch64-linux-android`, but not silently: `control.rs` imported
+  `Emitter` and `WebviewWindow` and declared `WINDOW` outside the desktop half, so
+  the fact that the tray, the shortcut and the cursor call are `#[cfg(desktop)]`
+  was not true of everything around them. Those are scoped now too, and the check
+  is quiet.
+- **Screen capture — settled, and it is a no.** `getDisplayMedia` is not a
+  function in Android WebView. The camera is the only capture a phone has, and
+  `getUserMedia` is present.
+- **WebCodecs — present, but unproven at speed.** The shell's WebView has
+  `VideoEncoder` and `AudioEncoder`. Whether a given device has a *hardware* H.264
+  encoder reachable from `VideoEncoder`, and whether it keeps up, is still a
+  measurement on real hardware. The encoder hook already reports a failure rather
   than pretending, which is the right shape for that answer.
-- **The `desktop` cfg on Android.** The whole shell is written so the desktop-only
-  half is `#[cfg(desktop)]` — the tray, the global shortcut, the cursor call —
-  while the opener plugin, the one a phone does want, is registered for every
-  target. That reasoning has not been compiled for Android yet, because the NDK is
-  not here; the first `cargo check --target aarch64-linux-android` after
-  `tauri android init` is where it gets proved, and it is the first thing to run.
 - **Input latency.** A stylus on a WebView canvas is at least one frame behind the
-  tip, and a telestrator is judged on exactly that. If it feels wrong on hardware
-  the fix is to draw the draft stroke with `pointerrawupdate` events or to paint
-  the draft on a separate, smaller canvas rather than in the main one.
+  tip, and a telestrator is judged on exactly that. Nothing here has been tried
+  with a stylus — an emulator has none, and a finger drew but says nothing about a
+  pen. If it feels wrong on hardware the fix is to draw the draft stroke with
+  `pointerrawupdate` events or to paint the draft on a separate, smaller canvas
+  rather than in the main one.
 
 ## Next steps, in order
 
-1. Run `tauri android init` on a machine with the SDK; commit `src-tauri/gen/android`.
-2. `cargo check --target aarch64-linux-android` and fix whatever the mobile cfg
-   turns up — that is the one claim here that has not been tested at all.
-3. Build a debug APK, install it, and measure: does the rail's bottom bar hold at
-   320px, does a stylus draw where it points, does a palm stay out of it, does a
-   rotation mid-draw lose a stroke.
-4. Hide the screen-capture control in the mobile shell, and make the camera the
-   first thing the Input panel offers.
-5. Only then: a keystore, `npm run android:build`, and a store listing.
+1. Generate a keystore, wire the signing config, and build the release APK — the
+   one that can be installed and later upgraded.
+2. Hide the screen-capture control in the mobile shell; the platform has said no.
+3. Try it on real hardware: a stylus, a palm resting on the glass, a rotation
+   mid-stroke, and a program pushed out to an RTMP platform from the device.
+4. Only then: a store listing.

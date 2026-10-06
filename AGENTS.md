@@ -66,7 +66,8 @@ anywhere near them:
 ```bash
 npm run desktop            # the shell, with hot reload in the webview
 npm run desktop:build      # the standalone executable for this platform
-npm run android            # the phone build (needs the SDK; see docs/android.md)
+npm run android            # the phone build, on a device (needs the SDK; docs/android.md)
+npm run android:build      # the APK and the AAB
 cargo build                # in src-tauri/
 cargo test --workspace     # both members: 63 media tests, 5 shell tests
 cargo test -p telestrator-media     # AMF0, FLV, chunk framing, RTMP, TLS
@@ -152,7 +153,17 @@ because a Windows and a macOS build need those systems.
   `run()`, because Android needs `mobile_entry_point` on a function its activity
   can call; `main.rs` only calls it. Everything a phone cannot use — the tray, the
   global shortcut, the whole of Control mode — is `#[cfg(desktop)]`,
-  so one shell serves both without a second copy of anything.
+  so one shell serves both without a second copy of anything. That cfg has to
+  cover what those pieces *use* as well as the pieces themselves: an import or a
+  `const` left outside it is dead code on Android, and
+  `cargo check --target aarch64-linux-android` is what says so.
+- **`src-tauri/gen/android` is committed source, not a cache.** `tauri android
+  init` writes it once and it is edited like anything else — and it does need
+  editing: the generator does not add the camera and microphone permissions, and
+  without them `getUserMedia` is refused before a dialog can appear. Its own
+  `.gitignore` files already exclude the Gradle output, the copied `jniLibs` and
+  the generated `tauri.conf.json`, so `git status` stays honest; a real keystore
+  belongs in `keystore.properties`, which is ignored too.
 - **Two pages, one build.** `index.html` is the static landing page — its own
   `src/home.css`, no app bundle, and copy written for search and answer engines.
   `app.html` is the studio and serves every other entry; it is `noindex`. Every

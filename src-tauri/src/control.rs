@@ -19,9 +19,15 @@
 //! which is exactly what a single-window telestrator wants anyway.
 
 use std::sync::Mutex;
-use tauri::{AppHandle, Emitter, Manager, WebviewWindow};
+use tauri::{AppHandle, Manager};
+// Only the desktop half names a window or talks to the webview, so a phone
+// build — where `SUPPORTED` is false and none of that code is compiled — does
+// not carry the imports either.
+#[cfg(desktop)]
+use tauri::{Emitter, WebviewWindow};
 
 /// The window the studio lives in, as named in `tauri.conf.json`.
+#[cfg(desktop)]
 pub const WINDOW: &str = "studio";
 
 /// The shortcut that gets you back out of Control mode. On the desktop build
