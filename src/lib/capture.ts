@@ -15,6 +15,12 @@ export type CaptureStatus = 'idle' | 'requesting' | 'live' | 'denied' | 'error'
 
 export interface MediaCapture {
   status: CaptureStatus
+  /**
+   * Whether this platform has a screen/tab picker at all. A control that offers
+   * a capability the platform does not have should not be drawn, so the picker
+   * asks this rather than guessing from the shell it is in.
+   */
+  supported: boolean
   stream: MediaStream | null
   /** Human-readable explanation shown for the `denied` and `error` states. */
   notice: string | null
@@ -27,6 +33,20 @@ export interface MediaCapture {
 const DISPLAY_CONSTRAINTS: DisplayMediaStreamOptions = {
   video: { displaySurface: 'browser' },
   audio: true,
+}
+
+/**
+ * Whether a screen or tab can be captured here.
+ *
+ * The rule is the capability, not which shell is hosting us: `getDisplayMedia`
+ * is absent from Android's WebView — and from any webview that simply does not
+ * implement it — so a control offering a tab picker on such a platform would be
+ * a button that can only fail. Where the browser has it, the web app offers it
+ * exactly as before. `devices` is passed in rather than read from `navigator`
+ * so the rule stays a pure one that can be tested.
+ */
+export function canShareScreen(devices: MediaDevices | undefined | null): boolean {
+  return typeof devices?.getDisplayMedia === 'function'
 }
 
 function errorName(cause: unknown): string {
@@ -202,7 +222,7 @@ function useMediaCapture({
     }
   }, [release])
 
-  return { status, stream, notice, start, stop }
+  return { status, supported: isSupported(), stream, notice, start, stop }
 }
 
 /**
@@ -214,7 +234,7 @@ function useMediaCapture({
  */
 export function useDisplayCapture(): MediaCapture {
   const isSupported = useCallback(
-    () => typeof navigator.mediaDevices?.getDisplayMedia === 'function',
+    () => canShareScreen(typeof navigator === 'undefined' ? undefined : navigator.mediaDevices),
     [],
   )
   const request = useCallback(() => navigator.mediaDevices.getDisplayMedia(DISPLAY_CONSTRAINTS), [])

@@ -15,12 +15,19 @@ import type { MediaFeeds } from '../lib/useMediaFeeds'
  */
 export function AddInputModal({
   screenStatus,
+  screenSupported,
   onToggleScreen,
   cameras,
   media,
   onClose,
 }: {
   screenStatus: CaptureStatus
+  /**
+   * Whether this platform has a screen/tab picker. A phone has no
+   * `getDisplayMedia`, so the row is not drawn there at all rather than offered
+   * and refused.
+   */
+  screenSupported: boolean
   /** Start or stop the shared tab/screen capture. */
   onToggleScreen: () => void
   cameras: HostCameras
@@ -53,27 +60,29 @@ export function AddInputModal({
         <h2 className="modal__title">Add an input</h2>
 
         <div className="picker">
-          <button
-            type="button"
-            className={`picker__row ${sharing ? 'picker__row--on' : ''}`}
-            data-testid="add-input-screen"
-            aria-busy={requesting}
-            disabled={requesting}
-            onClick={() => {
-              onToggleScreen()
-              onClose()
-            }}
-          >
-            <span className="picker__icon" aria-hidden="true">
-              <MonitorUp />
-            </span>
-            <span className="picker__text">
-              <strong>{sharing ? 'Stop sharing' : requesting ? 'Waiting…' : 'Share a tab or screen'}</strong>
-              <span className="picker__sub">
-                {sharing ? 'The captured tab is in the list' : 'A game, a stream — anything on a tab'}
+          {screenSupported && (
+            <button
+              type="button"
+              className={`picker__row ${sharing ? 'picker__row--on' : ''}`}
+              data-testid="add-input-screen"
+              aria-busy={requesting}
+              disabled={requesting}
+              onClick={() => {
+                onToggleScreen()
+                onClose()
+              }}
+            >
+              <span className="picker__icon" aria-hidden="true">
+                <MonitorUp />
               </span>
-            </span>
-          </button>
+              <span className="picker__text">
+                <strong>{sharing ? 'Stop sharing' : requesting ? 'Waiting…' : 'Share a tab or screen'}</strong>
+                <span className="picker__sub">
+                  {sharing ? 'The captured tab is in the list' : 'A game, a stream — anything on a tab'}
+                </span>
+              </span>
+            </button>
+          )}
 
           {cameras.devices.length === 0 ? (
             <span className="picker__empty" data-testid="add-input-no-cameras">

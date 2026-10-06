@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { classifyCaptureError } from './capture'
+import { canShareScreen, classifyCaptureError } from './capture'
 import { classifyCameraError } from './mediaErrors'
 import { classifyMicError } from './audio'
 
@@ -22,6 +22,20 @@ describe('classifyCaptureError', () => {
 
   it('names the failure when only the name is available', () => {
     expect(classifyCaptureError(new DOMException('x', 'AbortError')).notice).toContain('AbortError')
+  })
+})
+
+describe('canShareScreen', () => {
+  it('is the capability, not the platform', () => {
+    const devices = { getDisplayMedia: () => Promise.resolve() } as unknown as MediaDevices
+    expect(canShareScreen(devices)).toBe(true)
+  })
+
+  it('says no where there is no picker to call', () => {
+    // Android's WebView reports mediaDevices without getDisplayMedia, and a
+    // platform with no mediaDevices at all gets the same answer.
+    expect(canShareScreen({} as MediaDevices)).toBe(false)
+    expect(canShareScreen(undefined)).toBe(false)
   })
 })
 

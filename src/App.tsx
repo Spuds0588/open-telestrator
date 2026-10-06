@@ -415,6 +415,7 @@ export default function App() {
             onUndo={handleUndo}
             onClear={handleClear}
             screenStatus={capture.status}
+            screenSupported={capture.supported}
             onToggleScreen={toggleScreen}
             screenNotice={capture.notice}
             cameras={cameras}

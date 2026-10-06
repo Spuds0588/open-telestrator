@@ -62,6 +62,7 @@ export function Sidebar({
   onUndo,
   onClear,
   screenStatus,
+  screenSupported,
   onToggleScreen,
   screenNotice,
   cameras,
@@ -92,6 +93,8 @@ export function Sidebar({
   onUndo: () => void
   onClear: () => void
   screenStatus: CaptureStatus
+  /** Whether the platform has a screen/tab picker — a phone's webview has none. */
+  screenSupported: boolean
   onToggleScreen: () => void
   screenNotice: string | null
   cameras: HostCameras
@@ -718,6 +721,7 @@ export function Sidebar({
       {showAdd && (
         <AddInputModal
           screenStatus={screenStatus}
+          screenSupported={screenSupported}
           onToggleScreen={onToggleScreen}
           cameras={cameras}
           media={media}
