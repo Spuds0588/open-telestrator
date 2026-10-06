@@ -30,7 +30,9 @@ bundle, and its tests still prove it.
 
 ## What the shell adds
 
-Three things a browser cannot do, and nothing else.
+[README.md](../README.md#where-it-runs) has the table of what the three builds
+share and where they differ; this is the desktop half of it in detail — three
+things a browser cannot do, and nothing else.
 
 1. **A window that can ignore the pointer.** In *Draw* mode the window takes
    clicks and the canvas draws — what the web app has always done. In *Control*
@@ -293,11 +295,17 @@ published by hand.
 | `Open-Telestrator-linux-x86_64` | the build that has been run and checked |
 | `Open-Telestrator-windows-x86_64-beta.exe` | beta — built by CI, never run by a person |
 | `Open-Telestrator-macos-aarch64-beta.zip` | beta — as above; a zipped `.app`, because macOS needs a bundle for the permission prompts |
+| `Open-Telestrator-android-arm64-beta.apk` | beta — built and signed by hand rather than by CI (see *Signing, per platform*), and driven on an emulated tablet, but never held |
 
-Nothing about the code differs between the three; what differs is how much of it
+The APK is not the workflow's to build — it needs the keystore that deliberately
+stays off a runner — so it is uploaded to the release by hand. Its label on the
+release page is where a reader finds out what it is.
+
+Nothing about the code differs between the four; what differs is how much of it
 somebody has watched work. Linux is the machine the shell was developed and
-driven on. Windows and macOS are built by a runner nobody has sat at, so they are
-handed out as beta, in the filename and in the release notes.
+driven on. Windows and macOS are built by a runner nobody has sat at, and Android
+by an emulator nobody has held, so all three are handed out as beta, in the
+filename and in the release notes.
 
 That label is on the **assets**, never on the release. GitHub's `releases/latest`
 — the endpoint the app's update check reads — skips drafts *and* pre-releases, so
@@ -307,6 +315,7 @@ says "treat this one carefully" without saying "ignore the release". The notes
 are what the prompt shows, so they carry the same warning.
 
 **No secrets, and nothing to set up first.** There is no signing key to supply
+*to this workflow* — the Android key is used where it lives, never by a runner —
 and no `latest.json` to write: the artifact is the executable itself, and the
 release the API returns already carries the version and the notes the prompt
 shows. The only thing the workflow needs is the `GITHUB_TOKEN` every Actions run
@@ -388,8 +397,15 @@ deliberately: a second macOS job doubles the macOS assets without doubling the
 people who want them, and the two would need distinct asset names before they
 could sit side by side in one release.
 
-**Android.** A signed APK/AAB needs a keystore and `tauri android init` first;
-[docs/android.md](android.md#what-is-missing) has the list.
+**Android — signed with a key of its own, and never by CI.** The APK on the
+releases page carries this project's own certificate rather than the Android
+debug key, so it installs over an older copy of itself. The keystore deliberately
+lives outside the repository and outside Actions: anyone holding it can sign an
+APK that upgrades over this one, so the APK is built and signed on a machine that
+has it while the three desktop assets come from CI. `keystore.properties` is
+gitignored, and `*.jks`/`*.keystore` are ignored in the Android project in case
+one is ever generated there. Setting it up is
+[docs/android.md](android.md#signing-the-keystore-and-what-is-not-in-the-repository).
 
 ## What is left
 
@@ -403,10 +419,11 @@ could sit side by side in one release.
   code-signing certificate; the macOS bundle stays unsigned because signing it
   means an Apple Developer account. Both are accepted friction rather than
   unfinished code, and both are argued out under *Signing, per platform*.
-- **An APK for phones and tablets.** Config, layout and stylus rules are in
-  place; the generated Android project is not, because this machine has no JDK,
-  SDK or NDK. [docs/android.md](android.md) is the plan and the list of what is
-  uncertain about it.
+- **An APK measured on real hardware.** It is built, signed and driven on an
+  emulated tablet, and the screen-capture row is now left out where the platform
+  has no `getDisplayMedia`. Nobody has held it: a stylus, a palm on the glass and
+  a program pushed out to a platform from the phone are the three measurements
+  left. [docs/android.md](android.md#what-is-missing) is the list.
 - **Capture hardening.** `getDisplayMedia` works on WebView2 and WKWebView (after
   the Screen Recording grant), is unreliable on WebKitGTK, and is absent from
   Android's WebView. If a webview cannot capture, the fallback is Rust-side
@@ -502,8 +519,9 @@ could sit side by side in one release.
   events at the component: a pen at pressure 0.9 draws a 10px line where a pen at
   0.1 draws 4px (the configured width is 6), a touch arriving inside the palm
   window after a pen draws nothing at all, and the same touch two seconds later
-  draws at the neutral width. The APK itself is not built — see
-  [docs/android.md](android.md#what-is-missing).
+  draws at the neutral width. That was a browser; the APK itself has since been
+  built, signed and driven on an emulated tablet —
+  [docs/android.md](android.md) is where the evidence for it is.
 - **The macOS bundle was assembled on this machine from a stand-in binary.** The
   real Mach-O is built and wrapped by the runner, which is the point — this box
   cannot make one — but everything around it is exercised here: the script

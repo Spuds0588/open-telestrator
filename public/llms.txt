@@ -1,11 +1,14 @@
 # Open Telestrator
 
-> Free, open-source sports telestrator and live commentary studio that runs entirely in a web browser. Draw over any sport as it happens, commentate, and send viewers one link — no account, no capture card and no cost.
+> Free, open-source sports telestrator and live commentary studio. Draw over any sport as it happens, commentate, and send viewers one link — in a desktop browser or as a free desktop app, with no account, no capture card and no cost.
 
 Open Telestrator is a static web app (React, WebRTC and PeerJS) hosted on GitHub Pages. The host shares a browser tab or a camera as the video source, draws over it with arrows, circles and freehand strokes, records instant replays, mixes commentary audio, and broadcasts the program to viewers peer-to-peer. Viewers — and phones acting as extra camera angles — join by opening a link or scanning a QR code, and the player can be embedded in another site with a plain iframe.
 
+The same studio also ships as a native desktop app for Windows, macOS and Linux (a Tauri shell wrapping the identical web bundle) and as an Android app for phones and tablets. All three share the drawing, cameras, opened files and stream URLs, instant replay, audio mixer, co-hosts and the peer-to-peer viewer broadcast. The desktop app alone adds Control mode (the window stops taking clicks, so the pointer reaches the video underneath), streaming the program out to YouTube, Twitch, Facebook and around thirty other RTMP/RTMPS platforms, a tray icon, a global shortcut and a new-version notice. The Android app alone adds the touch and stylus layout — a bottom rail, a panel as a sheet, 44px controls and palm rejection — and offers neither Control mode nor screen capture, because Android's WebView has no `getDisplayMedia` and a phone has no window underneath to click through to. In a phone's browser the studio is not offered at all: the web app is desktop-only and points at the downloads instead, while viewer and cameraman links work in any phone browser.
+
 - Home page: https://spuds0588.github.io/open-telestrator/
 - Studio app: https://spuds0588.github.io/open-telestrator/app.html
+- Downloads (desktop app and Android APK): https://github.com/Spuds0588/open-telestrator/releases/latest
 - Source code and MIT licence: https://github.com/Spuds0588/open-telestrator
 
 ## Key facts
@@ -16,3 +19,5 @@ Open Telestrator is a static web app (React, WebRTC and PeerJS) hosted on GitHub
 - Broadcast: live-only, peer-to-peer over WebRTC. Viewers form a relay tree, so the stream never passes through a server and the host's uplink stays small.
 - Viewing: any modern browser, phone or desktop, with play/pause, volume, full screen and picture-in-picture; share by link or embed in an iframe.
 - Studio entries: the landing page lives at `/`; the host studio, `?watch=` viewer and `?camera=` cameraman entries live at `/app.html`.
+- Desktop app: one standalone executable per platform, no installer on any platform. The Linux build is the one that has been run and checked; the Windows and macOS assets are labelled beta. The macOS download is a zipped `.app`, because macOS only asks for camera, microphone and screen-recording permission on behalf of a bundle; it is not signed with an Apple certificate and needs one allow under Privacy & Security.
+- Android app: an APK signed with the project's own keystore, sideloaded rather than installed from a store. It is built and signed on a machine holding the key, not by CI.

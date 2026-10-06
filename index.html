@@ -7,7 +7,7 @@
     <title>Open Telestrator — free live sports commentary &amp; telestration</title>
     <meta
       name="description"
-      content="Comment on any sport for free. Draw over live video, talk over the action and send viewers one link — no account, no expensive kit, no cost. Runs in your browser."
+      content="Comment on any sport for free. Draw over live video, talk over the action and send viewers one link — no account, no expensive kit, no cost. Runs in your browser, and as a free desktop app for Windows, macOS and Linux."
     />
     <link rel="canonical" href="https://spuds0588.github.io/open-telestrator/" />
     <meta name="robots" content="index, follow" />
@@ -23,7 +23,7 @@
     />
     <meta
       property="og:description"
-      content="Turn the camera and browser you already have into a live telestrator: draw over any sport, commentate, and send viewers one link. No account, no kit, no cost."
+      content="Turn the camera and browser you already have into a live telestrator: draw over any sport, commentate, and send viewers one link. In your browser or as a free desktop app — no account, no kit, no cost."
     />
     <meta property="og:url" content="https://spuds0588.github.io/open-telestrator/" />
     <meta property="og:image" content="https://spuds0588.github.io/open-telestrator/og-image.png" />
@@ -41,7 +41,7 @@
     />
     <meta
       name="twitter:description"
-      content="Draw over any sport, commentate, and send viewers one link. No account, no expensive kit, no cost — it runs in your browser."
+      content="Draw over any sport, commentate, and send viewers one link. No account, no expensive kit, no cost — in your browser, or as a free desktop app."
     />
     <meta name="twitter:image" content="https://spuds0588.github.io/open-telestrator/og-image.png" />
 
@@ -67,12 +67,13 @@
             "name": "Open Telestrator",
             "url": "https://spuds0588.github.io/open-telestrator/",
             "applicationCategory": "MultimediaApplication",
-            "operatingSystem": "Any (modern web browser)",
+            "operatingSystem": "Any (modern web browser); Windows, macOS and Linux as a desktop app",
             "browserRequirements": "Requires a browser with WebRTC and MediaRecorder support",
-            "description": "Free, open-source sports telestrator and peer-to-peer broadcasting studio. Draw over live video, commentate, and share one viewer link — no account, no equipment and no cost.",
+            "description": "Free, open-source sports telestrator and peer-to-peer broadcasting studio. Draw over live video, commentate, and share one viewer link — in a browser or as a desktop app, with no account, no equipment and no cost.",
             "isAccessibleForFree": true,
             "offers": { "@type": "Offer", "price": "0" },
             "license": "https://opensource.org/license/mit",
+            "downloadUrl": "https://github.com/Spuds0588/open-telestrator/releases/latest",
             "sameAs": ["https://github.com/Spuds0588/open-telestrator"],
             "featureList": [
               "Telestration: arrows, circles and freehand drawing over live video",
@@ -81,6 +82,9 @@
               "Peer-to-peer viewer broadcast — one link, a tree of viewers",
               "Phones as extra camera angles via QR code",
               "Iframe embed for watching inside another site",
+              "Desktop app: Control mode, where clicks pass through to the video underneath",
+              "Desktop app: stream the program out to YouTube, Twitch, Facebook and other RTMP platforms",
+              "Android app for phones and tablets, with a stylus-and-finger layout",
               "Free and open source, no account required"
             ]
           },
@@ -125,7 +129,23 @@
                 "name": "Do I need an account or an install?",
                 "acceptedAnswer": {
                   "@type": "Answer",
-                  "text": "No account, and nothing must be installed. Open the studio in a browser and you are live in minutes. If you want it on a home screen or desktop, Open Telestrator also installs as a PWA."
+                  "text": "No account, and nothing has to be installed — open the studio in a browser and you are live in minutes. If you want it on a home screen, it installs as a PWA; if you want the desktop app, with Control mode and stream-out, download it for your platform and run it."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "Is there a desktop app?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "Yes. The same studio also ships as a free desktop app for Windows, macOS and Linux — one file, no installer. It adds the two things a browser cannot do: Control mode, where clicks pass through the window to the video underneath, and streaming the program straight out to YouTube, Twitch, Facebook and any other RTMP platform. Download it from the GitHub releases page."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "Can I run it on a phone or tablet?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "Yes — there is an Android app, downloaded from the releases page and installed by sideloading. It is laid out for a touch screen: the controls move to a bar along the bottom, every one is at least 44px, the canvas takes a stylus and a hand resting on the glass is ignored. A phone's browser is not the place for the studio — the web app is desktop-only and says so — but viewers and camera angles work in any phone browser."
                 }
               },
               {
@@ -158,12 +178,16 @@
         <h1>Share and comment on any sport — free, in your browser</h1>
         <p class="hero__lead">
           Open Telestrator is a free, open-source telestrator and live commentary studio
-          that runs entirely in your browser. Draw over any sport as it happens,
+          that runs entirely in your browser — and, when you want the extras, as a
+          desktop app for Windows, macOS and Linux. Draw over any sport as it happens,
           commentate over the top, and send viewers one link — no account, no capture
           card, no cost.
         </p>
         <p class="hero__cta">
           <a class="btn" href="./app.html">Open the studio</a>
+          <a class="btn btn--ghost" href="https://github.com/Spuds0588/open-telestrator/releases/latest"
+            >Download the desktop app</a
+          >
           <a class="btn btn--ghost" href="https://github.com/Spuds0588/open-telestrator"
             >View source on GitHub</a
           >
@@ -224,6 +248,115 @@
         </ol>
       </section>
 
+      <section class="section" aria-labelledby="where">
+        <h2 id="where">One studio, three ways to run it</h2>
+        <p class="section__lead">
+          The drawing, the cameras, the replays, the co-hosts and the viewer broadcast
+          are the same everywhere. What differs is what the platform underneath can do
+          — and where it cannot, the app leaves the control out rather than offering a
+          button that can only fail.
+        </p>
+        <div class="table-wrap">
+          <table class="compare">
+            <caption class="visually-hidden">
+              Features of Open Telestrator in a browser, as a desktop app, and as a
+              phone or tablet app
+            </caption>
+            <thead>
+              <tr>
+                <th scope="col">What</th>
+                <th scope="col">In your browser</th>
+                <th scope="col">Desktop app</th>
+                <th scope="col">Phone &amp; tablet app</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <th scope="row">Runs on</th>
+                <td>Desktop browsers only</td>
+                <td>Windows, macOS, Linux</td>
+                <td>Android phones and tablets</td>
+              </tr>
+              <tr>
+                <th scope="row">Draw over the picture — arrows, circles, freehand</th>
+                <td>Yes</td>
+                <td>Yes</td>
+                <td>Yes, with a finger or a stylus</td>
+              </tr>
+              <tr>
+                <th scope="row">Cameras, opened video files and stream URLs</th>
+                <td>Yes</td>
+                <td>Yes</td>
+                <td>Yes</td>
+              </tr>
+              <tr>
+                <th scope="row">Instant replay, commentary and the audio mixer</th>
+                <td>Yes</td>
+                <td>Yes</td>
+                <td>Yes</td>
+              </tr>
+              <tr>
+                <th scope="row">Co-hosts on an invite link, drawing on the program</th>
+                <td>Yes</td>
+                <td>Yes</td>
+                <td>Yes</td>
+              </tr>
+              <tr>
+                <th scope="row">Broadcast to viewers, one link or QR code</th>
+                <td>Yes</td>
+                <td>Yes</td>
+                <td>Yes</td>
+              </tr>
+              <tr>
+                <th scope="row">Capture a browser tab or the screen</th>
+                <td>Yes</td>
+                <td>Yes (macOS asks for Screen Recording)</td>
+                <td>No — a phone cannot capture its own screen</td>
+              </tr>
+              <tr>
+                <th scope="row">Control mode: clicks pass through to the video underneath</th>
+                <td>No</td>
+                <td>Yes</td>
+                <td>No — there is no window underneath</td>
+              </tr>
+              <tr>
+                <th scope="row">Stream out to YouTube, Twitch, Facebook, RTMP</th>
+                <td>No</td>
+                <td>Yes — around thirty platforms</td>
+                <td>In the code; encoding on a phone is unproven</td>
+              </tr>
+              <tr>
+                <th scope="row">Tray icon, global shortcut, and news of a new version</th>
+                <td>No</td>
+                <td>Yes, with an opt-out</td>
+                <td>No — a phone updates from an app store</td>
+              </tr>
+              <tr>
+                <th scope="row">Layout for a fingertip and a stylus, palm rejection</th>
+                <td>No — desktop browsers only</td>
+                <td>No — a mouse window</td>
+                <td>Yes — bottom rail, panel as a sheet</td>
+              </tr>
+              <tr>
+                <th scope="row">Installing it</th>
+                <td>Nothing to install; the page is the app</td>
+                <td>One file; no installer, ever</td>
+                <td>One APK, sideloaded</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="note">
+          The browser is the version to try first, and the desktop and phone builds
+          wrap exactly the same studio. The Linux desktop build is the one that has
+          been run and checked; the Windows and macOS ones are labelled beta, and the
+          macOS download is an app bundle you allow once under Privacy &amp; Security —
+          it is not signed with an Apple certificate, and that would mean an Apple
+          Developer account. It is a bundle because macOS only asks for camera,
+          microphone and screen-recording permission on behalf of one.
+        </p>
+      </section>
+
       <section class="section faq" aria-labelledby="faq">
         <h2 id="faq">Questions, answered</h2>
         <h3>Is Open Telestrator really free?</h3>
@@ -255,9 +388,30 @@
         </p>
         <h3>Do I need an account or an install?</h3>
         <p>
-          No account, and nothing must be installed. Open the studio in a browser and you
-          are live in minutes. If you want it on a home screen or desktop, Open
-          Telestrator also installs as a PWA.
+          No account, and nothing has to be installed — open the studio in a browser
+          and you are live in minutes. If you want it on a home screen, it installs as a
+          PWA; if you want the desktop app, with Control mode and stream-out, download
+          it for your platform and run it.
+        </p>
+        <h3>Is there a desktop app?</h3>
+        <p>
+          Yes. The same studio also ships as a free desktop app for Windows, macOS and
+          Linux — one file, no installer. It adds the two things a browser cannot do:
+          Control mode, where clicks pass through the window to the video underneath,
+          and streaming the program straight out to YouTube, Twitch, Facebook and any
+          other RTMP platform. Download it from the
+          <a href="https://github.com/Spuds0588/open-telestrator/releases/latest"
+            >GitHub releases page</a
+          >.
+        </p>
+        <h3>Can I run it on a phone or tablet?</h3>
+        <p>
+          Yes — there is an Android app, downloaded from the releases page and
+          installed by sideloading. It is laid out for a touch screen: the controls move
+          to a bar along the bottom, every one is at least 44px, the canvas takes a
+          stylus and a hand resting on the glass is ignored. A phone's browser is not
+          the place for the studio — the web app is desktop-only and says so — but
+          viewers and camera angles work in any phone browser.
         </p>
         <h3>Is the code open source?</h3>
         <p>
@@ -272,7 +426,12 @@
           A webcam is a studio. A phone is a second camera. Everything else is already in
           your browser.
         </p>
-        <a class="btn" href="./app.html">Open the studio — it's free</a>
+        <p class="hero__cta hero__cta--center">
+          <a class="btn" href="./app.html">Open the studio — it's free</a>
+          <a class="btn btn--ghost" href="https://github.com/Spuds0588/open-telestrator/releases/latest"
+            >Download the desktop app</a
+          >
+        </p>
       </section>
     </main>
 

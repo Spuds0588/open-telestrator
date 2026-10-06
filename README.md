@@ -2,7 +2,7 @@
 
 **[▶ Launch the studio →](https://Spuds0588.github.io/open-telestrator/app.html)** · [landing page](https://Spuds0588.github.io/open-telestrator/)
 
-Runs entirely in the browser and installs as a PWA — no account, no download.
+Runs entirely in the browser and installs as a PWA — no account, nothing to buy. The same studio also ships as a desktop app for Windows, macOS and Linux and as an Android app; see [Where it runs](#where-it-runs) for how the three differ.
 
 Free & open-source sports telestrator & P2P broadcasting studio. Draw over any live video tab, record 30s replays, mix audio, and co-host via PeerJS.
 
@@ -282,6 +282,30 @@ be set to **GitHub Actions** once; the site then lives at
 under `/<repo>/`, the workflow sets `VITE_BASE_PATH` to match (local dev stays at
 `/`).
 
+## Where it runs
+
+One studio, three builds. Everything in the first group is the same everywhere;
+the rows after it are where they part company.
+
+| | Browser | Desktop app | Phone & tablet app |
+| --- | --- | --- | --- |
+| Runs on | desktop browsers | Windows, macOS, Linux | Android |
+| Drawing, cameras, opened files and stream URLs, replay, audio mixer, co-hosts, viewer broadcast | yes | yes | yes |
+| Capture a tab or screen | yes | yes (macOS wants the Screen Recording grant) | no — the WebView has no `getDisplayMedia` |
+| Control mode: clicks pass through to the video underneath | no | yes | no |
+| Stream out to YouTube, Twitch, Facebook and other RTMP platforms | no | yes, around thirty presets | in the code; unproven on a phone |
+| Tray icon, global shortcut, news of a new version | no | yes | no |
+| Touch and stylus layout, palm rejection | no | no | yes |
+| Installing it | nothing — the page is the app | one file, no installer | one APK, sideloaded |
+
+The web app is desktop-only on purpose: a phone browser has no screen to capture
+and no pointer to draw with, so it shows a notice pointing at the downloads
+instead. Viewer and cameraman links still work in any phone browser.
+
+[docs/tauri-desktop.md](docs/tauri-desktop.md) and [docs/android.md](docs/android.md)
+are the detail behind the two shells, including the honest list of what is
+unproven on each.
+
 ## Desktop app
 
 The same studio also runs as a native desktop app, in a [Tauri](https://tauri.app)
@@ -348,23 +372,32 @@ per-platform prerequisites, what is verified, and what is still to do.
 
 ## Android
 
-A phone or tablet build is the next target, and it is *only* the shell that is
-planned rather than the web app: a phone opening the studio in a browser still
+The phone build is *only* the shell, never the web app: a phone opening the studio
+in a browser still
 gets the notice pointing at the downloads, because a browser tab cannot capture a
 screen and has no pointer to draw with. Inside the Android app the studio is
 there, laid out for the device — the rail becomes a bar along the bottom, the
 panel a sheet above it, every control at least 44px on its short side, the canvas
 taking the stylus and refusing the palm resting on the glass.
 
-The first APK is built, installed and driven on a tablet: the studio comes up
-instead of the notice, the rail moves to the bottom, and a finger draws. It is a
-**debug** build, signed with the Android debug key, so it sideloads onto a device
-but cannot go on Play and cannot be upgraded in place. A signed release needs a
-keystore, which is the one thing still missing.
+The APK on the
+[releases page](https://github.com/Spuds0588/open-telestrator/releases/latest) is
+a **signed release build**: its own keystore rather than the Android debug key, a
+stripped arm64 library, and installable over an older copy of itself. Sideload it
+— Android will ask you to allow installing unknown apps for whatever you open it
+from. The debug build it replaces was signed with the debug key, so a device that
+has that one installed has to uninstall it first. It is not on Play, and is not
+built by CI: the keystore is a secret, so a release APK is built and signed on a
+machine that has it.
 
-[docs/android.md](docs/android.md) has the plan, the scaffolding commands, and an
-honest list of what is uncertain — screen capture, WebCodecs, and how a stylus
-feels on a WebView canvas.
+The screen-capture control is not offered inside the app. Android's WebView has
+no `getDisplayMedia`, so the picker asks the platform — `canShareScreen` in
+`src/lib/capture.ts` — and leaves the row out rather than drawing a button that
+can only fail. The camera is the only capture a phone has.
+
+[docs/android.md](docs/android.md) has the toolchain, the keystore and signing
+steps, and an honest list of what is uncertain — WebCodecs at speed, and how a
+stylus feels on a WebView canvas.
 
 ## Stack
 

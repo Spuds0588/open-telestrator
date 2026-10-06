@@ -121,10 +121,13 @@ jobs:
           # The app's update prompt shows the first 320 characters of these
           # notes, so this stays one paragraph that fits: a Mac operator has to
           # know to allow the bundle once, and a truncated sentence would be the
-          # one place they are told. The reasoning behind all of it is in
-          # docs/tauri-desktop.md.
+          # one place they are told. All four platforms are named here, including
+          # Android, whose APK is built by hand rather than by this workflow and
+          # so gets no asset line of its own. The paragraph measures 297
+          # characters through `notesSummary` in src/lib/updates.ts, so a word
+          # added to it should be measured again rather than guessed at.
           gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" \
             --draft \
             --title "Open Telestrator $TAG" \
-            --notes "**Linux (x86_64)** — chmod +x, then run. **Windows (x86_64)** and **macOS (Apple Silicon)** are **beta**: built by CI, never run by a person. On a Mac, unzip, open **Open Telestrator.app** and allow it once under Privacy & Security — the bundle is what lets macOS ask for camera, microphone and screen recording."
+            --notes "**Linux (x86_64)** — chmod +x, then run. **Windows (x86_64)**, **macOS (Apple Silicon)** and **Android (arm64)** are **beta**: built, never run by a person. On a Mac, unzip **Open Telestrator.app** and allow it once under Privacy & Security — the bundle is what lets macOS ask for camera, microphone and screen recording."
           gh release upload "$TAG" "${{ matrix.asset }}" --clobber
