@@ -1,16 +1,15 @@
 # Android phones and tablets
 
-Status: **built, installed and driven on an emulated tablet.**
+Status: **built, signed and driven on an emulated tablet.**
 `src-tauri/gen/android` is committed, the shell compiles for
-`aarch64-linux-android`, and a debug APK of the studio runs: the studio replaces
-the notice, the rail moves to the bottom on a phone-shaped viewport, and a finger
-draws a stroke. What is still missing is a keystore — so the artifact is
-debug-signed and cannot go on Play — and anything measured on *real* hardware
-rather than an emulator.
+`aarch64-linux-android`, and a **signed release APK** of the studio runs: the
+studio replaces the notice, the rail moves to the bottom on a phone-shaped
+viewport, and a finger draws a stroke. What is still missing is anything measured
+on *real* hardware rather than an emulator, and a store listing.
 
 ```bash
 npm run android        # tauri android dev — needs the SDK, the NDK and a device
-npm run android:build  # tauri android build — APK + AAB
+npm run android:build  # tauri android build — APK + AAB, signed when keystore.properties exists
 ```
 
 The toolchain these were built with, on a machine that had none: JDK 17 (Temurin),
@@ -36,6 +35,7 @@ Two desktop-only ideas do not come across to this target:
 | --- | --- |
 | **Control mode** | not offered. There is no window underneath to hand the pointer to, and Tauri's `set_ignore_cursor_events` is desktop-only. The rail has no Control tile (`controlMode` in `App.tsx`), so the panel that switches it cannot be opened. |
 | **The update check** | not offered. A release carries desktop executables, so pointing a phone at the release page would hand it the wrong file — a phone's update path is the store or a sideload, not this. `useUpdates` asks the shell for its *shape* and stays inert unless it is a desktop window; the tray's manual **Check for updates**, which is the way back for a muted operator, does not exist on a phone either. |
+| **Capturing a tab or the screen** | not offered, and now not drawn either. Android's WebView has no `getDisplayMedia`, so the picker asks the platform (`canShareScreen` in `src/lib/capture.ts`) and leaves the row out. The camera is the only capture a phone has; the rule is the capability rather than the shell, so a desktop webview that lacks the API is treated the same way. |
 
 Stream-out to RTMP is *not* gated: the publisher crate compiles anywhere Rust
 does, so the Broadcast panel is there. Whether a phone can produce a program to
@@ -132,20 +132,78 @@ before any dialog can appear — so without these three lines the studio opens a
 camera and gets nothing. The two `uses-feature` entries beside them are
 `required="false"`, so the APK stays installable on a device that has neither.
 
-## What the first APK still needs
+## Signing: the keystore, and what is not in the repository
 
-1. **A keystore**, with the signing config in the generated project. Without it
-   the build produces a debug-signed APK: installable by sideload, but it cannot
-   go on Play and it cannot be upgraded in place, because the next key would not
-   match. The debug build is also large — an unstripped arm64 library is most of
-   a 138 MB APK, where a stripped release is a fraction of that.
-2. **The screen-capture control, hidden in the mobile shell.** This is no longer a
-   guess: the shell's WebView reports `getDisplayMedia` as absent. The control
-   currently offers a capability the platform does not have, and should not be
-   drawn at all.
-3. **The rail's bottom bar measured on hardware.** The layout rules are tested, and
+The APK is signed with a key of this project's own, and every part of that key
+lives outside the repository:
+
+- the keystore (`opentelestrator-release.jks`) — in this machine's toolchain
+directory, `~/.local/share/ot-android/`, never in a checkout and never committed;
+- `src-tauri/gen/android/keystore.properties`, which names the alias, the
+  password and the keystore's path. It is gitignored, and so are `*.jks` and
+  `*.keystore` in that directory, in case one is ever generated there by mistake.
+
+To make a key of your own, and point the build at it:
+
+```bash
+keytool -genkeypair -v -keystore ~/.local/share/ot-android/opentelestrator-release.jks \
+  -alias opentelestrator -keyalg RSA -keysize 2048 -validity 10000 \
+  -dname "CN=Open Telestrator, O=open-telestrator, C=GB"
+
+cat > src-tauri/gen/android/keystore.properties <<'EOF'
+keyAlias=opentelestrator
+password=<the store password>
+storeFile=/absolute/path/to/opentelestrator-release.jks
+EOF
+```
+
+`app/build.gradle.kts` reads that file if it is there and wires a `release`
+signing config; without it the release build is simply unsigned rather than
+failing, which is what a fresh clone has and what a debug build does not need.
+
+**The key never goes in the repository, not even in an Actions secret that is
+readable back.** Everything else about this project is reproducible from a
+checkout; a signing key is the one artefact that is not, and should not be —
+anyone holding it can sign an APK that installs over this one. So there is no
+Android job in `.github/workflows/desktop-release.yml`: the desktop builds come
+from CI, and the APK is built and signed where the key is.
+
+```bash
+source ~/.local/share/ot-android/env.sh
+npx tauri android build --apk --target aarch64 --ci
+# -> src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release.apk
+```
+
+Note that release is the **default**: there is no `--release` flag, and passing
+one is an error. `--debug` is the flag that turns it off.
+
+The APK on the `v0.1.1` release — `Open-Telestrator-android-arm64-beta.apk`, with
+`<name>-beta` for the same reason the Windows and macOS assets carry it — is
+7,115,991 bytes, SHA-256
+`7ab56af9ca9e62f7547964c1e71894d866aad1b9d35841bc8d31895497bc6f5d`. That digest
+was taken from a fresh `gh release download` rather than from the build, and the
+downloaded file was checked rather than trusted: `apksigner verify` reports one
+V2 signer, `CN=Open Telestrator, O=open-telestrator, C=GB`, whose SHA-256 matches
+the keystore's own fingerprint, and `aapt2 dump badging` reports
+`dev.opentelestrator.desktop`, versionCode `1001`, versionName `0.1.1`,
+`native-code: arm64-v8a` and `MainActivity` as the launcher. For scale: the debug
+APK this replaces was 138 MB, most of it an unstripped 137 MB library; this one is
+6.8 MB, with the same library stripped to 5.2 MB.
+
+## What is missing
+
+1. **The rail's bottom bar measured on hardware.** The layout rules are tested, and
    the emulated tablet put the rail along the bottom with 65px tiles, but the
-   sizes a thumb actually reaches are a matter of holding the device.
+   sizes a thumb actually reaches are a matter of holding the device. A stylus and
+   a program pushed out to an RTMP platform from the device are the other two
+   measurements nobody has taken.
+2. **A store listing.** The APK is signed and installable over an older copy of
+   itself, which is the part that mattered for upgrades, but a store also wants an
+   AAB, a listing and — for the biggest one — a Play signing key. No AAB has been
+   built or published.
+3. **An Intel Android target.** The APK carries `arm64-v8a` alone, so it installs
+   on a modern phone or tablet and on nothing older. A second target is a build
+   flag, not a code change, and is left until there is a device that needs it.
 
 ## What is uncertain
 
@@ -157,7 +215,12 @@ camera and gets nothing. The two `uses-feature` entries beside them are
   is quiet.
 - **Screen capture — settled, and it is a no.** `getDisplayMedia` is not a
   function in Android WebView. The camera is the only capture a phone has, and
-  `getUserMedia` is present.
+  `getUserMedia` is present. The picker now asks the *platform* rather than the
+  shell (`canShareScreen` in `src/lib/capture.ts`), and that rule was driven end
+  to end in a real browser with `getDisplayMedia` deleted before the studio's
+  bundle ran: the Add input picker came up with **Camera**, **Open a video file**
+  and **Open a stream URL** and no screen row at all. With the API present the row
+  is there, so the gate is the capability rather than a guess about the device.
 - **WebCodecs — present, but unproven at speed.** The shell's WebView has
   `VideoEncoder` and `AudioEncoder`. Whether a given device has a *hardware* H.264
   encoder reachable from `VideoEncoder`, and whether it keeps up, is still a
@@ -172,9 +235,8 @@ camera and gets nothing. The two `uses-feature` entries beside them are
 
 ## Next steps, in order
 
-1. Generate a keystore, wire the signing config, and build the release APK — the
-   one that can be installed and later upgraded.
-2. Hide the screen-capture control in the mobile shell; the platform has said no.
-3. Try it on real hardware: a stylus, a palm resting on the glass, a rotation
+1. Try it on real hardware: a stylus, a palm resting on the glass, a rotation
    mid-stroke, and a program pushed out to an RTMP platform from the device.
-4. Only then: a store listing.
+2. Build the AAB and write the listing — the signed APK has already proved the
+   signing path end to end, so this is paperwork and a second artifact.
+3. Add `x86_64` (and `armv7`) to the targets if a device turns up that needs one.

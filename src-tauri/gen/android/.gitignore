@@ -15,6 +15,9 @@ build
 local.properties
 key.properties
 keystore.properties
+# A signing key is never committed, even if one is generated here by mistake.
+*.jks
+*.keystore
 
 /.tauri
 /tauri.settings.gradle
