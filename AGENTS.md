@@ -23,7 +23,7 @@ found it, and say in your summary what you cleaned.
 2. **Remove build output and caches:**
 
    ```bash
-   npm run clean   # dist, dev-dist, coverage, *.tsbuildinfo, Vite/Vitest caches
+   npm run clean   # dist, dev-dist, coverage, *.tsbuildinfo, Vite/Vitest caches, Gradle output
    ```
 
    `dist/` is a build artifact and is regenerable — do not treat it as a
@@ -56,7 +56,7 @@ npm test           # Vitest, run once (246 tests)
 npm run typecheck  # tsc --noEmit
 npm run build      # typecheck + production build (also emits the service worker)
 npm run preview    # serve the production build
-npm run clean      # remove build output and caches
+npm run clean      # remove build output and caches (leaves src-tauri/target alone)
 ```
 
 The Rust half of the desktop build has its own commands. The publisher is a
@@ -78,8 +78,10 @@ cargo test -p open-telestrator      # the frame wire format the shell parses
 runs the tests before building, so a failing test blocks the deploy to prod. The
 workflow does not build the desktop app, so a Rust change is only as verified as
 what you ran locally. `.github/workflows/desktop-release.yml` does build it, on
-all three platforms at once, but only from a `v*` tag — and it has never been run,
-because a Windows and a macOS build need those systems.
+all three platforms at once, but only from a `v*` tag — `v0.1.0` was its first
+run, and all three jobs produced their asset. It labels the Windows and macOS
+assets `-beta` and still files only a **draft**: publishing is the one step left
+to a person.
 
 ## Conventions
 

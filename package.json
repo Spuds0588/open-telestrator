@@ -16,7 +16,7 @@
     "desktop:build": "tauri build",
     "android": "tauri android dev",
     "android:build": "tauri android build",
-    "clean": "rm -rf dist dev-dist coverage node_modules/.vite node_modules/.vitest *.tsbuildinfo"
+    "clean": "rm -rf dist dev-dist coverage node_modules/.vite node_modules/.vitest *.tsbuildinfo src-tauri/gen/android/app/build src-tauri/gen/android/.gradle"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.12.1",
