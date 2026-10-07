@@ -25,6 +25,7 @@ import {
   canDraw,
   hint as modeHint,
   label as modeLabel,
+  platformName,
   shortcutLabel,
   type ControlMode,
 } from '../lib/controlMode'
@@ -176,9 +177,7 @@ export function Sidebar({
   const active = panels.find((item) => item.id === panel) ?? null
 
   // The shortcut the shell actually registered on this platform.
-  const shortcut = shortcutLabel(
-    typeof navigator === 'undefined' ? '' : navigator.platform || navigator.userAgent,
-  )
+  const shortcut = shortcutLabel(platformName())
 
   const streamPlatform = platformFor(stream.destination.address)
   const streamProblem = destinationProblem(stream.destination.address, stream.destination.key)

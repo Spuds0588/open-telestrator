@@ -783,6 +783,26 @@ body.control .stage {
   pointer-events: none;
 }
 
+/* The one thing that survives Control mode: how to leave it. Everything else is
+   out of the way, and the window is ignoring the pointer, so this is a line of
+   text rather than a control — visible, and taking no pointer of its own. */
+.control-hint {
+  position: fixed;
+  left: 50%;
+  bottom: 16px;
+  transform: translateX(-50%);
+  z-index: 40;
+  margin: 0;
+  padding: 5px 12px;
+  border: 1px solid rgb(255 255 255 / 0.14);
+  border-radius: 999px;
+  background: rgb(10 12 16 / 0.78);
+  color: #f4f6f8;
+  font-size: 12px;
+  line-height: 1.4;
+  pointer-events: none;
+}
+
 .side-hint {
   font-size: 10px;
   color: var(--muted);

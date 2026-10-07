@@ -438,6 +438,59 @@ one is ever generated there. Setting it up is
   memory through the browser path rather than streaming it from disk through
   Tauri's asset protocol, which is what a large file wants.
 
+## What the Linux webview cannot do
+
+**This is the one thing that decides whether the Linux build is a build at all,**
+and it was learned the hard way — from an operator reporting that every input
+"just errored out". The engine is WebKitGTK, and it is not Chromium. The matrix
+below was measured, not remembered: a GTK window with a `WebKitWebView`, loading
+a page over `http://127.0.0.1` (a secure context) and reporting back through
+`webkit.messageHandlers`. Measured on **Debian 13, `libwebkit2gtk-4.1` 2.52.6**.
+
+| in WebKitGTK | | why it matters here |
+| --- | --- | --- |
+| `navigator.mediaDevices.getUserMedia` | **denied unless the embedder answers for it** | the camera is the app's main input. WebKitGTK's `permission-request` signal has no prompt of its own, so an unanswered request is a denial: `NotAllowedError`. With a handler that allows, the same call returns a track. `lib.rs` now sets one. |
+| `getDisplayMedia` | present | so the Add-input picker draws its screen row — and the row then needs that same handler. |
+| `HTMLCanvasElement.captureStream` | **present**, 1 video track | the broadcast path's foundation works. |
+| `HTMLMediaElement.captureStream` | **absent** | expected, and why opened files are re-drawn onto a canvas. |
+| `MediaRecorder`, `VideoEncoder`, `AudioEncoder` | present | — |
+| **`RTCPeerConnection`** | **absent, and not fixable from here** | see below. |
+| `MediaSource.isTypeSupported('video/mp4; codecs="avc1.42E01E"')` | `true` | MP4/H.264 plays. |
+| `MediaSource.isTypeSupported('video/mp2t; codecs="avc1.42E01E"')` | **`false`** | MPEG-TS is not a media source, so an HLS playlist of TS segments **cannot be played** by `hls.js` here. An `.m3u8` that serves fMP4 may still work. |
+| `canPlayType('video/mp4')` | `maybe`/`probably` | — |
+
+### There is no WebRTC, and the setting that claims otherwise is a no-op
+
+`RTCPeerConnection` and `RTCDataChannel` are **undefined** in this webview. That
+is not a configuration mistake waiting to be fixed:
+
+- `WebKitSettings:enable-webrtc` exists and can be set to `true` — and it changes
+  nothing. Verified three ways: set on the live view's settings, set on a
+  `WebKitSettings` passed to `WebView.new_with_settings` before the view existed,
+  and set over a secure origin. `typeof RTCPeerConnection` is `undefined` in
+  every case.
+- The library gives the reason: `libwebkit2gtk-4.1.so` links no `libgstwebrtc`,
+  and contains no `webrtcbin` or `GstWebRTC` references. WebKitGTK's WebRTC is a
+  GStreamer pipeline, so without it there is nothing to expose.
+- It is a long-standing upstream fact rather than a packaging accident here. The
+  Tauri discussion *Functional WebRTC in WebkitGTK on Linux* (tauri-apps#8426)
+  has the working recipe, and it begins by **rebuilding WebKitGTK yourself** with
+  `-DENABLE_WEB_RTC=ON`; the maintainer's answer in the same thread is that it
+  has not been that way for a year and will not be soon.
+- `wry` cannot turn it on either: its Linux settings block sets webgl, webaudio,
+  the page cache, the user agent and devtools, and nothing about media or RTC.
+
+**The consequence is blunt.** P2P broadcasting, the viewer link, the cameraman
+link and co-host drawing all need `RTCPeerConnection`. On Linux, in this engine,
+as it ships, **none of them can work** — for any Linux user on a stock distro,
+not just this machine. What the shell still adds on Linux is Control mode, the
+RTMP stream-out (where the encoded frames come from a canvas, not from a peer),
+and the tray. Everything peer-to-peer has to happen in a browser instead.
+
+Stream-out is the interesting survivor, and it has not been dialled: the program
+is a canvas, the frames go over IPC to the Rust publisher, and no peer is
+involved. That path is worth trying on Linux *before* deciding anything.
+
 ## Verified how
 
 - `cargo test -p telestrator-media` — 63 tests, no server: AMF0, FLV, chunk

@@ -228,6 +228,32 @@ is. `v0.1.1` carries the first signed one; release is the *default* for
   splitting them across windows would fork the strokes. Streaming the program out
   to an RTMP platform is the shell's other addition. See
   [docs/tauri-desktop.md](docs/tauri-desktop.md).
+- **The Linux webview is WebKitGTK, and WebKitGTK has no WebRTC.**
+  `RTCPeerConnection` is `undefined` there, `enable-webrtc` is a no-op (verified
+  with the setting on, over a secure origin, in every way it can be set), and the
+  library links no GStreamer WebRTC backend. Upstream's answer is to rebuild
+  WebKitGTK with `-DENABLE_WEB_RTC=ON` (tauri-apps#8426). So on Linux, in the
+  engine as it ships, **broadcasting, the viewer, the cameraman link and co-host
+  drawing cannot work at all** — only Control mode, the tray and the RTMP
+  stream-out can. Do not test P2P features against the Linux shell, and do not
+  promise them on Linux. Two more measured facts from the same probe: the engine
+  *does* expose `canvas.captureStream` and MP4/H.264, and it does **not** accept
+  `video/mp2t` as a media source, so an HLS playlist of TS segments cannot play
+  there. The whole matrix is in `docs/tauri-desktop.md`.
+- **A webview refuses the camera unless the embedder answers for it.** On Linux
+  there is no default prompt to fall back on: WebKitGTK's `permission-request`
+  signal goes unanswered and `getUserMedia` fails with `NotAllowedError`. The
+  shell sets a handler in `run()` that allows Camera, Microphone and
+  DisplayCapture and leaves everything else to the platform. The matching rule
+  for the web side is `canShareScreen` — the capability, not the shell.
+- **Control mode must never be enterable without a way out.** A click-through
+  window cannot be clicked, so the exits are the global shortcut and the tray —
+  and a tray icon is not something every desktop draws (GNOME needs an
+  extension). `control.rs` therefore refuses to enter the mode until the
+  shortcut is bound, and `control_offered` is what the rail asks before drawing
+  the tile; a shell that cannot get out of the mode does not offer it. The
+  window also carries the way back on screen (`escapeHint`) while in the mode,
+  because text is the one control that survives it.
 - **Nothing outside `src/lib/desktop.ts` may ask whether we are in the shell.**
   Every other module asks it, so the browser keeps behaving identically and its
   tests keep proving it. `@tauri-apps/api` is imported lazily inside it, so the

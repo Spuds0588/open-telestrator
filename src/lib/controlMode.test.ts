@@ -3,9 +3,11 @@ import {
   DEFAULT_MODE,
   bodyClass,
   canDraw,
+  escapeHint,
   hint,
   label,
   offersControlMode,
+  platformName,
   shortcutLabel,
   toggle,
 } from './controlMode'
@@ -51,5 +53,24 @@ describe('control mode', () => {
   it('only offers the mode where the window can pass clicks through', () => {
     expect(offersControlMode(true)).toBe(true)
     expect(offersControlMode(false)).toBe(false)
+  })
+
+  // Control mode hides the chrome and ignores the pointer, so this line is the
+  // only way out the operator is ever shown. It has to name the key, and the
+  // right key for the platform, or the mode really is a trap.
+  it('says how to get out of the mode, with this platform’s key', () => {
+    expect(escapeHint('MacIntel')).toBe('Control mode — press Cmd+Shift+D to draw again')
+    expect(escapeHint('Linux x86_64')).toBe('Control mode — press Ctrl+Shift+D to draw again')
+    expect(escapeHint('Win32')).toContain('Ctrl+Shift+D')
+  })
+
+  it('agrees with the shortcut the shell registered', () => {
+    for (const platform of ['MacIntel', 'Linux x86_64', 'Win32', '']) {
+      expect(escapeHint(platform)).toContain(shortcutLabel(platform))
+    }
+  })
+
+  it('reads the platform from one place, and survives having no navigator', () => {
+    expect(typeof platformName()).toBe('string')
   })
 })

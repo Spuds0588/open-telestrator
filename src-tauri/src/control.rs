@@ -18,6 +18,7 @@
 //! pass-through is still an open upstream request (tauri-apps/tauri#13070) —
 //! which is exactly what a single-window telestrator wants anyway.
 
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 use tauri::{AppHandle, Manager};
 // Only the desktop half names a window or talks to the webview, so a phone
@@ -39,6 +40,30 @@ pub const WINDOW: &str = "studio";
 pub const SHORTCUT_LABEL: &str = "Cmd+Shift+D";
 #[cfg(all(desktop, not(target_os = "macos")))]
 pub const SHORTCUT_LABEL: &str = "Ctrl+Shift+D";
+
+/// Whether the global shortcut is bound — the only hatch that is certain to
+/// work.
+///
+/// A click-through window cannot be clicked, so the ways back are the shortcut
+/// and the tray icon, and the tray is not something every desktop shows: GNOME
+/// needs an extension for it, and a tray that is drawn but ignored is no hatch
+/// at all. The shortcut goes wherever the pointer does, so it is the one way out
+/// this code will rely on. If binding it failed, Control mode must not be
+/// entered: a window that ignores the pointer with nothing left to click is an
+/// app the operator has to kill.
+static ESCAPE_READY: AtomicBool = AtomicBool::new(false);
+
+/// Record that binding the shortcut succeeded. Called once, from the shell's
+/// setup, and only on a target that has a shortcut to bind.
+#[cfg(desktop)]
+pub fn mark_escape_ready() {
+  ESCAPE_READY.store(true, Ordering::Relaxed);
+}
+
+/// Whether anything can currently hand the pointer back.
+pub fn escape_ready() -> bool {
+  ESCAPE_READY.load(Ordering::Relaxed)
+}
 
 #[derive(Default)]
 pub struct ControlState {
@@ -67,6 +92,11 @@ pub fn set(app: &AppHandle, control: bool) -> Result<bool, String> {
   if !SUPPORTED {
     return Err(NO_SECOND_WINDOW.into());
   }
+  // Only the dangerous direction is gated. Turning Control *off* is always
+  // allowed, and has to be: it is what the hatch itself asks for.
+  if control && !escape_ready() {
+    return Err(NO_WAY_BACK.into());
+  }
   #[cfg(desktop)]
   {
     return set_window(app, control);
@@ -83,6 +113,20 @@ pub fn set(app: &AppHandle, control: bool) -> Result<bool, String> {
 
 /// What the webview is told when it asks for a mode this build does not have.
 pub const NO_SECOND_WINDOW: &str = "This build has no window to pass the pointer to.";
+
+/// What the webview is told when Control mode is asked for with no way back.
+pub const NO_WAY_BACK: &str =
+  "Control mode is off because the Draw/Control shortcut could not be bound, and that shortcut is the only way back to the pointer.";
+
+/// Whether the rail should draw a Control tile at all.
+///
+/// Both conditions are needed: a window that can be told to ignore the pointer,
+/// and a live shortcut to undo it. The rail asks this rather than the shell
+/// name, so a build whose shortcut failed to bind offers no tile instead of one
+/// that can only refuse.
+pub fn offers() -> bool {
+  SUPPORTED && escape_ready()
+}
 
 #[cfg(desktop)]
 fn set_window(app: &AppHandle, control: bool) -> Result<bool, String> {
@@ -118,6 +162,11 @@ pub fn toggle(app: &AppHandle) -> Result<bool, String> {
 #[tauri::command]
 pub fn control_set(app: AppHandle, control: bool) -> Result<bool, String> {
   set(&app, control)
+}
+
+#[tauri::command]
+pub fn control_offered() -> bool {
+  offers()
 }
 
 #[tauri::command]

@@ -49,6 +49,19 @@ export async function getControlMode(): Promise<boolean | null> {
 }
 
 /**
+ * Whether the shell offers Control mode at all — asked once, at startup.
+ *
+ * A window made to ignore the pointer needs a way back, and the shell refuses
+ * the mode when the global shortcut could not be bound (see `control::offers`
+ * in `src-tauri/src/control.rs`). The rail asks before drawing the tile, so a
+ * build with no way out of Control mode has no Control tile either, rather than
+ * one that can only refuse.
+ */
+export async function controlOffered(): Promise<boolean | null> {
+  return invoke<boolean>('control_offered')
+}
+
+/**
  * Hear about a mode change made anywhere — the rail's switch, the global
  * shortcut, or the tray icon. Returns an unsubscribe function, which is a no-op
  * in a browser.

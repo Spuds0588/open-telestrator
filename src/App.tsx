@@ -21,8 +21,8 @@ import {
   type Stroke,
   type Tool,
 } from './lib/telestration'
-import { isDesktop, onControlMode, setControlMode, shellMode } from './lib/desktop'
-import { DEFAULT_MODE, bodyClass, type ControlMode } from './lib/controlMode'
+import { controlOffered, isDesktop, onControlMode, setControlMode, shellMode } from './lib/desktop'
+import { DEFAULT_MODE, bodyClass, escapeHint, platformName, type ControlMode } from './lib/controlMode'
 import { useStreamOut } from './lib/useStreamOut'
 import { useUpdates } from './lib/useUpdates'
 import { useLayout } from './lib/useLayout'
@@ -75,18 +75,49 @@ export default function App() {
   useLayout()
   const updates = useUpdates()
   // Control mode is a window behaviour, and a phone has no second window to
-  // click through to: the rail simply has no Control tile there.
-  const controlMode = desktop && shellMode() !== 'mobile'
+  // click through to: the rail simply has no Control tile there. The shell is
+  // asked as well, because a window that ignores the pointer needs a way back —
+  // when the shortcut that gets you out could not be bound the shell refuses the
+  // mode, and a tile that can only refuse is worse than no tile.
+  const [controlAllowed, setControlAllowed] = useState(false)
+  const controlMode = desktop && shellMode() !== 'mobile' && controlAllowed
   const [mode, setMode] = useState<ControlMode>(DEFAULT_MODE)
   // Whether the program should be composited for stream-out. Kept separate from
   // the stream's own state because the compositor has to be running *before* the
   // publisher connects, or the first seconds of the stream are a blank canvas.
   const [streamOn, setStreamOn] = useState(false)
 
-  /** Change the mode here and, if there is a shell, in the window itself. */
+  // Ask once, at startup, whether the shell can offer Control mode at all.
+  // Answering "no" is the shell saying the global shortcut is not bound, which
+  // it is right about: without it the mode has no exit.
+  useEffect(() => {
+    if (!desktop) return
+    let alive = true
+    void controlOffered().then((offered) => {
+      if (alive) setControlAllowed(offered === true)
+    })
+    return () => {
+      alive = false
+    }
+  }, [desktop])
+
+  /**
+   * Change the mode here and, if there is a shell, in the window itself.
+   *
+   * The shell's answer is what moves this UI, not the request. Control mode
+   * cannot be undone from inside the window, so the shell is the only thing that
+   * knows whether it was entered at all, and a rail that claimed it on request
+   * alone is how the mode came to look like a one-way door.
+   */
   const changeMode = useCallback((next: ControlMode) => {
-    setMode(next)
-    if (desktop) void setControlMode(next === 'control')
+    if (!desktop) {
+      setMode(next)
+      return
+    }
+    void setControlMode(next === 'control').then((applied) => {
+      if (applied === null) return
+      setMode(applied ? 'control' : 'draw')
+    })
   }, [desktop])
 
   // The global shortcut and the tray icon change the mode without us: follow
@@ -446,6 +477,16 @@ export default function App() {
       {/* One line of news from outside: a newer version exists. Only ever on
           screen inside a shell, and only until it is answered. */}
       <UpdateNotice update={updates} />
+
+      {/* The only thing left on screen in Control mode: the way back out.
+          Everything else is out of the way by design there, and the window is
+          ignoring the pointer, so this has to be text — but a window that
+          cannot be clicked can still be read. */}
+      {mode === 'control' && (
+        <p className="control-hint" data-testid="control-hint">
+          {escapeHint(platformName())}
+        </p>
+      )}
 
       {/* Desktop-only: mobile and tablet viewports get this instead of the app. */}
       <div className="unsupported" data-testid="unsupported-notice">

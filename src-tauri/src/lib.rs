@@ -26,6 +26,7 @@ use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::TrayIconBuilder;
 #[cfg(desktop)]
 use tauri::Emitter;
+use tauri::webview::{PermissionKind, PermissionResponse};
 
 /// The event the shell sends the webview when someone asks for an update check
 /// from outside it — the tray menu, because in Control mode the window ignores
@@ -45,6 +46,7 @@ pub fn run() {
     .manage(stream::Streams::default())
     .invoke_handler(tauri::generate_handler![
       control::control_get,
+      control::control_offered,
       control::control_set,
       stream::stream_failure,
       stream::stream_frame,
@@ -55,6 +57,21 @@ pub fn run() {
   // Opening the release page is the one plugin every platform wants: a phone has
   // no browser chrome around this app either.
   builder = builder.plugin(tauri_plugin_opener::init());
+
+  // The camera, the microphone and the screen are most of what this app is for,
+  // and a webview refuses all three unless the embedder answers for them. On
+  // Linux this is not a default that can be left alone: WebKitGTK's
+  // `permission-request` signal has no prompt of its own, so an unanswered
+  // request is denied and `getUserMedia` fails with `NotAllowedError`. Measured
+  // rather than assumed — with a handler that allows, a real webview returns a
+  // track; with none, it refuses. Nothing outside these three is granted here:
+  // the app asks for no location, no notifications and no MIDI.
+  builder = builder.on_permission_request(|_webview, kind| match kind {
+    PermissionKind::Camera | PermissionKind::Microphone | PermissionKind::DisplayCapture => {
+      PermissionResponse::Allow
+    }
+    _ => PermissionResponse::Default,
+  });
 
   // A tray and a second pointer mode are desktop ideas, and a phone has neither,
   // so they are compiled in only where they exist.
@@ -103,11 +120,16 @@ fn register_shortcut(app: &tauri::AppHandle) -> tauri::Result<()> {
     Modifiers::CONTROL | Modifiers::SHIFT
   };
   let shortcut = Shortcut::new(Some(modifiers), Code::KeyD);
-  if let Err(error) = app.global_shortcut().register(shortcut) {
-    eprintln!(
-      "Could not bind {}. Use the tray icon to change modes instead. ({error})",
+  match app.global_shortcut().register(shortcut) {
+    // The hatch is the shortcut, so Control mode is offered only once it is
+    // bound — see `control::offers`. The tray's toggle is still built below and
+    // still works, but a tray icon is not something every desktop shows, so it
+    // is not what this promise is made on.
+    Ok(()) => control::mark_escape_ready(),
+    Err(error) => eprintln!(
+      "Could not bind {}. Control mode is unavailable without it. ({error})",
       control::SHORTCUT_LABEL
-    );
+    ),
   }
   Ok(())
 }

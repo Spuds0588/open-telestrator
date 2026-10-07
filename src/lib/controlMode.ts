@@ -61,6 +61,30 @@ export function shortcutLabel(platform: string): string {
 }
 
 /**
+ * The line left on the window while Control mode is on.
+ *
+ * Control mode hides the chrome and hands the pointer to whatever is under the
+ * window, so this is the only control that survives it — and it cannot be a
+ * button, because by definition nothing on this window can be clicked. Text
+ * still works where a button cannot: the window is visible even when it is not
+ * clickable, so the one thing the operator needs to be told mid-mode is how to
+ * leave it. Relying on them having read the panel beforehand is what made the
+ * mode look like a one-way door.
+ */
+export function escapeHint(platform: string): string {
+  return `Control mode — press ${shortcutLabel(platform)} to draw again`
+}
+
+/**
+ * The platform string the shortcut is read from, in one place so the rail's
+ * tooltip, this hint and `src-tauri/src/control.rs` cannot disagree.
+ */
+export function platformName(): string {
+  if (typeof navigator === 'undefined') return ''
+  return navigator.platform || navigator.userAgent
+}
+
+/**
  * Whether the app should offer Control mode at all. It is a window behaviour,
  * so only the desktop build has it; the web build keeps its seven rail tiles.
  */
