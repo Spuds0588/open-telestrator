@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react'
-import { shellMode } from './desktop'
 import { layoutFor, type Layout } from './touch'
 
 /** Whether the primary pointer is a finger or a stylus rather than a mouse. */
@@ -32,8 +31,9 @@ function same(a: Layout | null, b: Layout | null): boolean {
  * body.touch                  controls are sized for a fingertip
  * ```
  *
- * In a browser this is deliberately inert: it answers `null` and sets nothing,
- * so the web build keeps its desktop-only notice exactly as it was.
+ * A phone in a browser is the case this exists for: the studio is the app, and a
+ * hand-held viewport gets the rail along the bottom rather than a notice telling
+ * it to go and find a download.
  */
 export function useLayout(): Layout | null {
   const [layout, setLayout] = useState<Layout | null>(null)
@@ -41,7 +41,6 @@ export function useLayout(): Layout | null {
   useEffect(() => {
     const measure = () => {
       const next = layoutFor({
-        mode: shellMode(),
         userAgent: navigator.userAgent,
         width: window.innerWidth,
         height: window.innerHeight,

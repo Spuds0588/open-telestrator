@@ -9,19 +9,3 @@ coverage
 
 # Tooling metadata (a project id), not part of the app.
 .freebuff/
-
-# Rust / Tauri: any build cache (cargo's is per-workspace, and a nested one
-# appears if a command is run from inside a member crate), plus the ACL schemas
-# generated at build time. The workspace root Cargo.lock *is* committed: this is
-# an application, not a library.
-target/
-src-tauri/gen/schemas
-
-# An assembled macOS bundle, if `src-tauri/macos/bundle.mjs` is run here rather
-# than on the runner that ships it. The directory-only form keeps a file that
-# merely ends in `.app` visible.
-*.app/
-
-# The rest of `src-tauri/gen` is *not* ignored: `tauri android init` writes the
-# Gradle project the APK is built from into `gen/android`, and that is meant to
-# be committed. It carries its own `.gitignore` for the Gradle caches it makes.

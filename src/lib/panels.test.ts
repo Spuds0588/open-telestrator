@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_PANEL, PANELS, desktopPanels, panelBadge, type PanelStatus } from './panels'
+import { DEFAULT_PANEL, PANELS, panelBadge, type PanelStatus } from './panels'
 
 const quiet: PanelStatus = {
   inputs: 0,
@@ -36,49 +36,12 @@ describe('PANELS', () => {
   })
 })
 
-describe('desktopPanels', () => {
-  it('leaves the web build with exactly the seven tiles it has always had', () => {
-    expect(desktopPanels(false).map((panel) => panel.id)).toEqual(PANELS.map((panel) => panel.id))
-    expect(desktopPanels(false).some((panel) => panel.id === 'control')).toBe(false)
-  })
-
-  it('puts Control at the head, above Draw', () => {
-    // Whether the pointer draws at all comes before what it draws with.
-    const panels = desktopPanels(true)
-    expect(panels[0]?.id).toBe('control')
-    expect(panels.map((panel) => panel.id)).toEqual(['control', ...PANELS.map((panel) => panel.id)])
-  })
-
-  it('keeps Control with the main panels rather than the utilities', () => {
-    expect(desktopPanels(true).find((panel) => panel.id === 'control')?.utility).toBeUndefined()
-  })
-
-  it('still opens on a panel both rosters have', () => {
-    expect(desktopPanels(true).some((panel) => panel.id === DEFAULT_PANEL)).toBe(true)
-  })
-
-  it('does not mutate the web roster', () => {
-    desktopPanels(true)
-    expect(PANELS.map((panel) => panel.id)).not.toContain('control')
-  })
-})
-
 describe('panelBadge', () => {
   it('stays quiet when nothing is happening', () => {
     for (const panel of PANELS) {
       if (panel.id === 'input') continue
       expect(panelBadge(panel.id, quiet)).toBeNull()
     }
-  })
-
-  it('says on the rail when the pointer is not drawing', () => {
-    // Null rather than silent: a mode you cannot see is a mode you get stuck in.
-    expect(panelBadge('control', quiet)).toBeNull()
-    expect(panelBadge('control', status({ mode: 'draw' }))).toBeNull()
-    expect(panelBadge('control', status({ mode: 'control' }))).toEqual({
-      text: 'ctrl',
-      tone: 'warn',
-    })
   })
 
   it('flags an input list that is still empty', () => {

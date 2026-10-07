@@ -13,16 +13,8 @@
 
 import type { MicStatus } from './audio'
 import type { BroadcastStatus } from './useBroadcast'
-import type { ControlMode } from './controlMode'
 
-/**
- * `control` exists only in the desktop build. It is in the union rather than
- * being handled with a cast because the rail, the icon map and the badge rule
- * are all keyed by it: leaving it out is what makes "the web build has seven
- * tiles" a fact the compiler knows rather than a comment.
- */
 export type PanelId =
-  | 'control'
   | 'draw'
   | 'input'
   | 'audio'
@@ -39,19 +31,10 @@ export interface PanelSpec {
 }
 
 /**
- * The desktop roster: Control sits above Draw, because whether the pointer draws
- * at all comes before what it draws with.
- *
- * `PANELS` stays the web roster — the browser has no way to pass a click to the
- * page underneath, so it has no Control mode to offer — and the studio asks for
- * `desktopPanels(isDesktop)` instead of reading `PANELS` directly.
+ * The roster: main panels first, utilities last, in the order the rail renders
+ * them. One roster for every device — a phone draws and streams from the same
+ * seven tiles a desktop does.
  */
-export function desktopPanels(isDesktop: boolean): PanelSpec[] {
-  if (!isDesktop) return PANELS
-  return [{ id: 'control', label: 'Control' }, ...PANELS]
-}
-
-/** Main panels first, utilities last — the order the rail renders them in. */
 export const PANELS: PanelSpec[] = [
   { id: 'draw', label: 'Draw' },
   { id: 'input', label: 'Input' },
@@ -84,8 +67,6 @@ export interface PanelStatus {
   broadcasting: BroadcastStatus
   viewers: number
   gamepads: number
-  /** Only the desktop build has a mode to report; the web build leaves it out. */
-  mode?: ControlMode
 }
 
 /**
@@ -114,10 +95,6 @@ export function panelBadge(id: PanelId, status: PanelStatus): PanelBadge | null 
       return status.broadcasting === 'opening' ? { text: '…', tone: 'warn' } : null
     case 'hardware':
       return status.gamepads > 0 ? { text: String(status.gamepads), tone: 'count' } : null
-    // A mode you cannot see is a mode you will be stuck in, so a closed panel
-    // says when the pointer is not drawing.
-    case 'control':
-      return status.mode === 'control' ? { text: 'ctrl', tone: 'warn' } : null
     // Drawing is already on screen; a badge would only be noise.
     case 'draw':
       return null

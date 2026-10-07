@@ -2,18 +2,10 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 
-export default defineConfig(({ mode }) => {
-  // The desktop shell loads the bundle from disk, so it is always served from
-  // the root; GitHub Pages' sub-path only applies to the web build.
-  //
-  // The mode is set by `vite --mode desktop` rather than by an environment
-  // variable, because `TAURI_ENV_*` prefixed assignments do not survive a
-  // Windows shell and the desktop build is Windows-first.
-  const desktop = mode === 'desktop'
-
+export default defineConfig(() => {
   // GitHub Pages serves a project site from https://<owner>.github.io/<repo>/,
   // so the deploy workflow sets VITE_BASE_PATH. Local dev/build keep "/".
-  const base = desktop ? '/' : (process.env.VITE_BASE_PATH ?? '/')
+  const base = process.env.VITE_BASE_PATH ?? '/'
 
   // The landing page keeps the bare base address, so it is the one navigation
   // the offline fallback must not swallow — it is precached by filename instead.
@@ -24,15 +16,12 @@ export default defineConfig(({ mode }) => {
     base,
     plugins: [
       react(),
-      // The desktop build gets no worker and no precache: inside the shell a
-      // service worker would be a cache to invalidate rather than an offline
-      // story, because the app is installed rather than visited. Only the
-      // worker's *generation* is switched off, so `virtual:pwa-register` still
-      // resolves for the import in main.tsx — which is itself dead there, and
-      // tree-shaken away.
+      // One build for every device now, so the worker is always generated: it is
+      // what lets an installed studio open without a network, and a phone is the
+      // device that benefits from that most.
       VitePWA({
-        disable: desktop,
         registerType: 'autoUpdate',
+        // The registration itself is in `src/main.tsx`.
         injectRegister: false,
         includeAssets: ['icons/*.png'],
         manifest: {
@@ -59,6 +48,18 @@ export default defineConfig(({ mode }) => {
           ],
         },
         workbox: {
+          // These two have to be spelled out, and that is not obvious: the plugin
+          // only applies them itself when it is the one injecting the
+          // registration (`injectRegister: 'auto'`), and we register from
+          // `src/main.tsx` instead. Without them a new worker installs and then
+          // *waits* — `skipWaiting()` would only ever be called by a message
+          // nobody sends — so an open studio, which on a phone can be open for
+          // days, keeps running the bundle it opened. That is precisely how a
+          // phone came to serve a months-old build. `skipWaiting` activates the
+          // new worker at once and `clientsClaim` puts open pages under it, which
+          // is what lets the autoUpdate reload below fire while the page is live.
+          skipWaiting: true,
+          clientsClaim: true,
           // Offline, a navigation lands in the studio. The landing page's own
           // addresses are denylisted so they are served by the precache (or the
           // network) rather than the studio shell.

@@ -6,6 +6,11 @@
  * that, and a stylus is not a mouse: it reports pressure, and the hand resting on
  * the glass reports touches of its own.
  *
+ * A phone in a browser is a first-class way to run this now that there is no app
+ * to send it to, so this is not a shell-only story: every viewport gets an
+ * answer, and the answer for something held in a hand is the rail along the
+ * bottom with a sheet for the panel.
+ *
  * The decisions about all of that live here rather than in the components, for
  * the usual reason: "which layout is this and may this pointer draw" is exactly
  * the sort of thing that breaks quietly on the one device nobody tested. The
@@ -19,9 +24,6 @@
  * actually aims for, and the one a new control should be checked against.
  */
 export const MIN_TARGET = 44
-
-/** Where the app is running, as far as layout is concerned. */
-export type ShellMode = 'browser' | 'desktop' | 'mobile'
 
 export type FormFactor = 'desktop' | 'tablet' | 'phone'
 export type Orientation = 'portrait' | 'landscape'
@@ -47,13 +49,7 @@ export const SIDE_RAIL_MIN_WIDTH = 1024
 const MOBILE_UA = /android|iphone|ipad|ipod|mobile/i
 const TABLET_UA = /ipad|tablet|playbook|silk/i
 
-/**
- * Whether a user agent describes a phone or a tablet at all.
- *
- * `desktop.ts` asks this of the shell before it will call it a phone: a webview
- * inside a desktop window reports a desktop user agent, whatever the window is
- * shaped like.
- */
+/** Whether a user agent describes a phone or a tablet at all. */
 export function isMobileUserAgent(userAgent: string): boolean {
   return MOBILE_UA.test(userAgent ?? '')
 }
@@ -71,43 +67,42 @@ export interface Viewport {
  * in a portrait one. Android tablets are the awkward case — their user agent
  * carries no `Mobile` token, which is exactly the fact that identifies them.
  *
- * A `mobile` shell whose webview lies about its user agent falls back to the
- * short side, which is the same rule the stores use to draw the line.
+ * A user agent that says nothing at all is taken for a desktop: a mouse-driven
+ * window keeps the rail it has always had however narrow it is made, which is
+ * what the old short-side fallback used to get wrong.
  */
-export function detectFormFactor(mode: ShellMode, userAgent: string, viewport: Viewport): FormFactor {
+export function detectFormFactor(userAgent: string, viewport: Viewport): FormFactor {
   const ua = userAgent ?? ''
   if (TABLET_UA.test(ua) || (MOBILE_UA.test(ua) && /android/i.test(ua) && !/mobile/i.test(ua))) {
     return 'tablet'
   }
   if (/iphone|ipod/i.test(ua)) return 'phone'
   if (MOBILE_UA.test(ua)) return Math.min(viewport.width, viewport.height) >= 600 ? 'tablet' : 'phone'
-  // Nothing in the user agent: a phone shell that reports a desktop webview, or
-  // a Windows tablet in the desktop shell. The short side decides.
-  if (mode === 'mobile') return Math.min(viewport.width, viewport.height) >= 600 ? 'tablet' : 'phone'
+  // Nothing in the user agent that says otherwise: a desktop browser, at
+  // whatever shape its window happens to be. A mouse-driven window keeps the
+  // rail it has always had rather than being mistaken for a phone the moment it
+  // is made narrow, which is what the short-side rule would do here.
   return 'desktop'
 }
 
 /**
- * The layout for this viewport, or `null` in a browser.
+ * The layout for this viewport. Always an answer: there is no shell to defer to
+ * and no unsupported-device notice any more — a phone in a browser gets the
+ * studio, laid out for a hand.
  *
- * `null` is the whole of the web build's story: the browser is still desktop-only
- * and phones still get the notice pointing at the downloads, so no touch layout
- * is applied there. Inside a shell — desktop or mobile — every viewport gets an
- * answer, including the strange ones, because a window can be resized to any
- * shape at all and a tablet can be rotated mid-broadcast.
+ * Every viewport gets an answer, including the strange ones, because a window
+ * can be resized to any shape at all and a tablet can be rotated mid-broadcast.
  */
 export function layoutFor(input: {
-  mode: ShellMode
   userAgent: string
   width: number
   height: number
   /** Whether the primary pointer is coarse — a finger or a stylus. */
   touch: boolean
-}): Layout | null {
-  const { mode, userAgent, width, height, touch } = input
-  if (mode === 'browser') return null
+}): Layout {
+  const { userAgent, width, height, touch } = input
 
-  const form = detectFormFactor(mode, userAgent, { width, height })
+  const form = detectFormFactor(userAgent, { width, height })
   const orientation: Orientation = height > width ? 'portrait' : 'landscape'
   const roomy = width >= SIDE_RAIL_MIN_WIDTH
 

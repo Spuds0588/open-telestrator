@@ -2,18 +2,22 @@
 
 **[▶ Launch the studio →](https://Spuds0588.github.io/open-telestrator/app.html)** · [landing page](https://Spuds0588.github.io/open-telestrator/)
 
-Runs entirely in the browser and installs as a PWA — no account, nothing to buy. The same studio also ships as a desktop app for Windows, macOS and Linux and as an Android app; see [Where it runs](#where-it-runs) for how the three differ.
+Runs entirely in the browser and installs as a PWA — no account, nothing to buy,
+nothing to download. The same page is the studio whether it is on a desk with two
+monitors or a phone propped against a fence; see [Where it runs](#where-it-runs).
 
-Free & open-source sports telestrator & P2P broadcasting studio. Draw over any live video tab, record 30s replays, mix audio, and co-host via PeerJS.
+Free & open-source sports telestrator & P2P broadcasting studio. Draw over any live video tab, record 30s replays, mix audio, co-host via PeerJS, and push the program out to YouTube or Twitch over WebRTC.
 
 ## Status
 
-Desktop-only browser PWA — **capture, telestration, instant replay, stage audio,
-a magic-link cameraman feed, opened video files and streams, and a viewer
-broadcast that fans the composited program out to phones as a PeerJS tree**.
+One web app, **capture, telestration, instant replay, stage audio, a magic-link
+cameraman feed, opened video files and streams, a viewer broadcast that fans the
+composited program out to phones as a PeerJS tree, and stream-out to a live
+platform over WebRTC**.
 The controls are a rail of icon tiles on the right of the stage with one panel
-open in front of it, so no group can scroll out of reach and every tile is sized
-for a fingertip or a stylus. Each tile carries its own live badge — how many
+open in front of it on a desktop, and a bar along the bottom with the panel as a
+sheet on a phone, so no group can scroll out of reach and every tile is sized for
+a fingertip or a stylus. Each tile carries its own live badge — how many
 inputs are on the stage, whether the mic is hot, who has joined the link, the
 viewer count while on air — so a closed panel still says what it is doing.
 Clicking the open tile, or the panel's ✕, hides the panel entirely for a
@@ -26,7 +30,8 @@ opened file sits under the list, and the panel ends with the **corner camera** �
 the picture-in-picture that sits bottom-right on air. Alongside it: the **Audio**
 mixer (announcer mic and captured program audio, each with mute, volume and a
 live level meter); **Replay**; **Co-hosts**, which mints the invite link and QR,
-lists who is connected and can drop one; **Broadcast**; and a **Hardware**
+lists who is connected and can drop one; **Broadcast**, which mints the viewer
+link and publishes the program to a platform; and a **Hardware**
 utility at the foot of the rail. Icons are Lucide outlines, bundled with the app
 and drawn in the colour of the control they sit in. The 16:9 stage is scaled with
 `transform` to fit, so the video keeps its ratio without squeezing the rail, and
@@ -38,9 +43,6 @@ Going live happens from the strip pinned at the top of every panel — the progr
 on air, the **Go live** button, or the viewer count once live. That same count is
 reported to any connected co-host, who can also draw on the same canvas (see
 **Shared drawing** below).
-Phones and tablets are not supported by this web app and get a notice pointing
-at the GitHub releases instead; the cameraman and viewer pages still work on any
-device.
 
 ## Cameraman magic link
 
@@ -111,7 +113,9 @@ A pasted URL works too: progressive MP4/WebM plays natively, HLS (`.m3u8`) uses
 
 Two honest limits. **RTSP and RTMP cannot play in a browser at all** — that is
 what VLC is for — so those links are refused with a notice rather than failing
-silently. And a remote stream must allow this page (CORS), because the feed is
+silently. (That is about *input*: the program goes *out* over WebRTC, see
+**Stream out** below.) And a remote stream must allow this page (CORS), because
+the feed is
 drawn to a canvas on its way to viewers; a server that refuses is reported
 rather than turning the broadcast black.
 
@@ -124,11 +128,11 @@ viewers. That is what puts the drawing in front of the audience: strokes are not
 a local annotation, they are the broadcast.
 
 - **Corner camera.** Pick any source under **Program → Corner camera** and it
-sits in the right-hand corner of the programme, for viewers as well as for the
-host — the commentator's own webcam, or a second angle.
+  sits in the right-hand corner of the programme, for viewers as well as for the
+  host — the commentator's own webcam, or a second angle.
 - **Live corner.** Start an instant replay and the live feed stays in the
-top-right corner while the replay plays big, so nobody misses the next moment.
-Replays therefore reach viewers too: the programme follows the stage.
+  top-right corner while the replay plays big, so nobody misses the next moment.
+  Replays therefore reach viewers too: the programme follows the stage.
 
 The composited track keeps its identity while you switch sources, replay or
 draw, so viewers are not re-connected every time you change something. While the
@@ -164,6 +168,38 @@ itself rather than freezing:
 
 Broadcasting is one-way to viewers: they never send video or audio back to the
 host or to each other.
+
+## Stream out
+
+The same program can go to a platform — YouTube, Twitch, Facebook, anything a
+service can reach. It goes over **WHIP** (WebRTC-HTTP Ingestion Protocol): the
+browser posts one SDP offer to the service, gets an answer back, and publishes
+the composited picture and the stage audio as they are. A browser is already a
+WebRTC encoder, so there is no encoder to install, no `ffmpeg`, no extension and
+no companion process — publishing is one button in the **Broadcast** panel.
+
+The trade is reach. YouTube's and Twitch's own ingest addresses speak RTMP, which
+a browser cannot open a socket for, so the stream goes through a service that
+accepts WebRTC and forwards. Three are offered, in the order they are useful:
+
+- **Restream** — takes WHIP on its **free** plan and re-sends the stream to every
+  platform connected to that account, converting to RTMP where a platform needs
+  it. This is the one that reaches the platforms people already stream to.
+- **Cloudflare Stream** — accepts WHIP and plays the feed back over WHEP.
+  Nothing is forwarded, so this is for owning the feed rather than for reaching
+  YouTube. WebRTC delivery there is billed from 15 October 2026.
+- **LiveKit** — accepts WHIP into an ingress and can push out to YouTube, Twitch
+  or Facebook from an egress, but it is a deployment or an account of your own.
+
+To go live: pick the service in the **Broadcast** panel, paste the publish URL
+its dashboard shows you (the panel says which tab it is on, and links the
+service's own documentation), paste the bearer token if that service wants one,
+and press **Stream out**. The URL is a credential in its own right for Restream
+and Cloudflare — the secret is part of the address — so it is masked on screen
+and never logged. Stopping sends the `DELETE` that hangs up the session.
+
+WHIP is a cross-origin `POST` from this page, so the service has to allow it. If
+one refuses, the panel says so rather than retrying forever.
 
 ## What a viewer sees
 
@@ -249,6 +285,33 @@ There are two pages, both produced by the multi-page Vite build:
 Every viewer, cameraman and QR link the host mints points at `/app.html`
 (`buildViewerLink` / `buildCameraLink`), never at the landing page.
 
+## Where it runs
+
+The studio is one page and one build. Which shape it takes comes from the
+viewport: a mouse-driven window keeps the rail down the side, and anything held
+in a hand — a phone, a tablet, a foldable — gets the rail along the bottom with
+the panel as a sheet above it, every control at least 44px on its short side, and
+a canvas that takes the stylus and refuses the palm resting on the glass.
+
+| | Desktop browser | Phone & tablet browser |
+| --- | --- | --- |
+| Drawing, cameras, opened files and stream URLs, replay, audio mixer, co-hosts, viewer broadcast | yes | yes |
+| Stream out to a platform over WHIP | yes | yes |
+| Capture a tab or screen | yes | only where the browser has `getDisplayMedia` — Android Chrome has it, iOS Safari does not |
+| Touch and stylus layout, palm rejection | no | yes |
+| Installing it | nothing — the page is the app, or install it as a PWA | same; PWA install from the browser menu |
+
+A control the platform cannot honour is never drawn: the Add input picker offers
+its screen/tab row only where `getDisplayMedia` exists (`canShareScreen` in
+[`src/lib/capture.ts`](src/lib/capture.ts)), so a phone that cannot share its
+screen never shows a button that can only fail.
+
+**One caveat on phones.** A broadcast is the one thing a phone browser is
+genuinely bad at, and none of it is our doing: an iOS or Android browser
+suspends a tab's work when you leave it, so a phone can hold a camera or a
+cameraman link all day but is not a place to run the host studio for an hour.
+Use a desktop for the host and a phone for a second camera angle.
+
 ## Development
 
 ```bash
@@ -271,6 +334,10 @@ seconds at 0.5×.
 Shortcuts: `1`–`4` tools, `C`/`X` colour, `Z` undo, `Delete` clear, `[`/`]`
 previous/next source, `R` replay (play/pause while replaying), `L` back to live.
 
+Resize the window narrow, or open the same page with device emulation on, to see
+the phone layout: the rail moves to the bottom and the panel becomes a sheet.
+There is no separate phone build to start — it is the same bundle.
+
 ## Hosting
 
 The app is a static front end, so it deploys straight to GitHub Pages. The
@@ -282,128 +349,10 @@ be set to **GitHub Actions** once; the site then lives at
 under `/<repo>/`, the workflow sets `VITE_BASE_PATH` to match (local dev stays at
 `/`).
 
-## Where it runs
-
-One studio, three builds. Everything in the first group is the same everywhere;
-the rows after it are where they part company.
-
-| | Browser | Desktop app | Phone & tablet app |
-| --- | --- | --- | --- |
-| Runs on | desktop browsers | Windows, macOS, Linux | Android |
-| Drawing, cameras, opened files and stream URLs, replay, audio mixer, co-hosts, viewer broadcast | yes | yes | yes |
-| Capture a tab or screen | yes | yes (macOS wants the Screen Recording grant) | no — the WebView has no `getDisplayMedia` |
-| Control mode: clicks pass through to the video underneath | no | yes | no |
-| Stream out to YouTube, Twitch, Facebook and other RTMP platforms | no | yes, around thirty presets | in the code; unproven on a phone |
-| Tray icon, global shortcut, news of a new version | no | yes | no |
-| Touch and stylus layout, palm rejection | no | no | yes |
-| Installing it | nothing — the page is the app | one file, no installer | one APK, sideloaded |
-
-The web app is desktop-only on purpose: a phone browser has no screen to capture
-and no pointer to draw with, so it shows a notice pointing at the downloads
-instead. Viewer and cameraman links still work in any phone browser.
-
-[docs/tauri-desktop.md](docs/tauri-desktop.md) and [docs/android.md](docs/android.md)
-are the detail behind the two shells, including the honest list of what is
-unproven on each.
-
-## Desktop app
-
-The same studio also runs as a native desktop app, in a [Tauri](https://tauri.app)
-shell that wraps the very bundle GitHub Pages serves — nothing about the UI, the
-compositor or the drawing is forked. It adds the three things a browser cannot do:
-
-- **Control mode.** In Draw the window takes clicks and you draw on it; in Control
-the whole window stops taking clicks, so the pointer belongs to the video, page
-or application underneath — you see and touch the real thing, not our copy of it.
-Switch with the rail's **Control** panel, `Ctrl/Cmd+Shift+D`, or the tray icon.
-- **News of a newer version.** The app asks GitHub a few seconds after launch
-whether there is a newer
-[release](https://github.com/Spuds0588/open-telestrator/releases), and says so if
-there is — the button opens the release page in your own browser. It ships as one
-standalone executable with no installer, so it never replaces itself: you
-download the new file and run that. If you would rather not be told, the prompt
-has a checkbox that turns the notifications off for good — and the tray's **Check
-for updates** still answers when you ask.
-- **Stream out to RTMP.** Push the program — drawings, corners and all — straight
-to YouTube Live, Twitch, Facebook Live, Instagram, Rumble, Trovo, Steam,
-Restream, Mux, BoxCast or any other RTMP ingest, without a media server or
-`ffmpeg` to install: the app opens the connection itself. Both the plain
-`rtmp://` ingest and the encrypted `rtmps://` one work, and the encrypted one is
-the only kind Facebook Live, Instagram and LinkedIn publish. The picker lists
-around thirty services in groups, and **Something else** takes an address that is
-not on it.
-
-```bash
-npm run desktop        # run it against the dev server
-npm run desktop:build  # the standalone executable, in src-tauri/target/release
-```
-
-There is no installer on any platform: a build leaves one executable — about 6 MB,
-webview included — and running that file *is* the installation. On Linux it wants
-`chmod +x` first. On macOS the download is a zipped **Open Telestrator.app**:
-unzip it, open it, and allow it once under **Privacy & Security**, because it is
-not signed with an Apple certificate — that would mean an Apple Developer
-account. It is a bundle
-rather than a bare file for a reason: macOS only asks for camera, microphone and
-screen-recording access on behalf of an app bundle, so this is what lets the two
-inputs the whole studio is built around work on a Mac at all.
-
-The Linux download is the build that has been run and checked. The Windows and
-macOS ones are labelled **beta**: CI builds them on systems nobody has driven the
-app on yet, so expect rough edges there.
-
-To go live to a platform: in YouTube Studio, **Create → Go live → Stream**, copy
-the **stream key**, then in the studio open the **Broadcast** panel, pick the
-platform, paste the key and **Stream out**. Either ingest address the page shows
-works, plain or encrypted (`rtmp://a.rtmp.youtube.com/live2` or
-`rtmps://a.rtmp.youtube.com/live2` for YouTube, `rtmp://live.twitch.tv/app` for
-Twitch). The key is kept in the window and never shown in full.
-
-Facebook Live and Instagram are in the picker; both publish an encrypted ingest
-only, which is what the app's TLS support is for. LinkedIn Live is not, and
-cannot be a preset: Live Studio issues its address per event, on a channel that
-belongs to your account, so it belongs in **Something else** with what the page
-shows you. Any platform that issues a per-account ingest address, like TikTok,
-belongs there too.
-
-Building from source needs a Rust toolchain, and on Linux the WebKitGTK and GTK
-development packages. See [docs/tauri-desktop.md](docs/tauri-desktop.md) for the
-per-platform prerequisites, what is verified, and what is still to do.
-
-## Android
-
-The phone build is *only* the shell, never the web app: a phone opening the studio
-in a browser still
-gets the notice pointing at the downloads, because a browser tab cannot capture a
-screen and has no pointer to draw with. Inside the Android app the studio is
-there, laid out for the device — the rail becomes a bar along the bottom, the
-panel a sheet above it, every control at least 44px on its short side, the canvas
-taking the stylus and refusing the palm resting on the glass.
-
-The APK on the
-[releases page](https://github.com/Spuds0588/open-telestrator/releases/latest) is
-a **signed release build**: its own keystore rather than the Android debug key, a
-stripped arm64 library, and installable over an older copy of itself. Sideload it
-— Android will ask you to allow installing unknown apps for whatever you open it
-from. The debug build it replaces was signed with the debug key, so a device that
-has that one installed has to uninstall it first. It is not on Play, and is not
-built by CI: the keystore is a secret, so a release APK is built and signed on a
-machine that has it.
-
-The screen-capture control is not offered inside the app. Android's WebView has
-no `getDisplayMedia`, so the picker asks the platform — `canShareScreen` in
-`src/lib/capture.ts` — and leaves the row out rather than drawing a button that
-can only fail. The camera is the only capture a phone has.
-
-[docs/android.md](docs/android.md) has the toolchain, the keystore and signing
-steps, and an honest list of what is uncertain — WebCodecs at speed, and how a
-stylus feels on a WebView canvas.
-
 ## Stack
 
 Vite + React + TypeScript, packaged as an installable PWA (`vite-plugin-pwa`).
-The web build stays shell-agnostic so the Tauri desktop shell wraps the same
-`dist/` output — and so the Android shell can too. The desktop-only half lives in
-`src-tauri/`, including an RTMP publisher written in Rust whose only dependency
-is the TLS stack, and a shell that is a library with a two-line binary in front
-of it so a phone's activity can start the same code.
+All transport is WebRTC: PeerJS for the host-to-viewer tree and the cameraman
+link, and WHIP for stream-out. There is no backend, no native shell and nothing
+to install — the same `dist/` that GitHub Pages serves is the app everywhere it
+runs.

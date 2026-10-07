@@ -21,13 +21,9 @@ import {
   type Stroke,
   type Tool,
 } from './lib/telestration'
-import { controlOffered, isDesktop, onControlMode, setControlMode, shellMode } from './lib/desktop'
-import { DEFAULT_MODE, bodyClass, escapeHint, platformName, type ControlMode } from './lib/controlMode'
 import { useStreamOut } from './lib/useStreamOut'
-import { useUpdates } from './lib/useUpdates'
 import { useLayout } from './lib/useLayout'
 import { Sidebar } from './components/Sidebar'
-import { UpdateNotice } from './components/UpdateNotice'
 import { VideoStage } from './components/VideoStage'
 
 /** Narrow, stable colour handles so the document keydown handler can hand a
@@ -44,11 +40,6 @@ function prevColor(current: string): string {
   const index = COLORS.indexOf(current as Color)
   return COLORS[(index - 1 + COLORS.length) % COLORS.length] as string
 }
-
-/** The web app is desktop-only; phones and tablets get a notice instead. */
-const GITHUB_URL = 'https://github.com/Spuds0588/open-telestrator'
-/** Where the notice sends a phone: the app that is made for it. */
-const RELEASES_URL = `${GITHUB_URL}/releases/latest`
 
 export default function App() {
   const capture = useDisplayCapture()
@@ -67,79 +58,14 @@ export default function App() {
   const [past, setPast] = useState<Stroke[]>([])
   const [future, setFuture] = useState<Stroke[]>([])
 
-  // The shell brings things a browser cannot: a window that can ignore the
-  // pointer, an RTMP socket, and news of a newer version. All of them are inert
-  // on the web. `useLayout` sets nothing in a browser either — it exists so that
-  // a phone-shaped shell and an awkward window both get a layout that fits.
-  const desktop = isDesktop()
+  // The layout this viewport should be drawn in — a phone's rail along the
+  // bottom with fingertip-sized controls, a desktop's rail down the side — is
+  // worked out from the viewport and the pointer and hung on <body> for the CSS.
   useLayout()
-  const updates = useUpdates()
-  // Control mode is a window behaviour, and a phone has no second window to
-  // click through to: the rail simply has no Control tile there. The shell is
-  // asked as well, because a window that ignores the pointer needs a way back —
-  // when the shortcut that gets you out could not be bound the shell refuses the
-  // mode, and a tile that can only refuse is worse than no tile.
-  const [controlAllowed, setControlAllowed] = useState(false)
-  const controlMode = desktop && shellMode() !== 'mobile' && controlAllowed
-  const [mode, setMode] = useState<ControlMode>(DEFAULT_MODE)
   // Whether the program should be composited for stream-out. Kept separate from
   // the stream's own state because the compositor has to be running *before* the
   // publisher connects, or the first seconds of the stream are a blank canvas.
   const [streamOn, setStreamOn] = useState(false)
-
-  // Ask once, at startup, whether the shell can offer Control mode at all.
-  // Answering "no" is the shell saying the global shortcut is not bound, which
-  // it is right about: without it the mode has no exit.
-  useEffect(() => {
-    if (!desktop) return
-    let alive = true
-    void controlOffered().then((offered) => {
-      if (alive) setControlAllowed(offered === true)
-    })
-    return () => {
-      alive = false
-    }
-  }, [desktop])
-
-  /**
-   * Change the mode here and, if there is a shell, in the window itself.
-   *
-   * The shell's answer is what moves this UI, not the request. Control mode
-   * cannot be undone from inside the window, so the shell is the only thing that
-   * knows whether it was entered at all, and a rail that claimed it on request
-   * alone is how the mode came to look like a one-way door.
-   */
-  const changeMode = useCallback((next: ControlMode) => {
-    if (!desktop) {
-      setMode(next)
-      return
-    }
-    void setControlMode(next === 'control').then((applied) => {
-      if (applied === null) return
-      setMode(applied ? 'control' : 'draw')
-    })
-  }, [desktop])
-
-  // The global shortcut and the tray icon change the mode without us: follow
-  // whatever the shell reports rather than assuming ours is authoritative.
-  useEffect(() => {
-    if (!desktop) return
-    let dispose: (() => void) | null = null
-    void onControlMode((control) => setMode(control ? 'control' : 'draw')).then((off) => {
-      dispose = off
-    })
-    return () => dispose?.()
-  }, [desktop])
-
-  // In Control mode the window is a clear pane over whatever is beneath it, so
-  // the chrome steps out of the way — see `body.control` in index.css.
-  useEffect(() => {
-    document.body.classList.toggle('control', bodyClass(mode) === 'control')
-    document.body.classList.toggle('desktop', desktop)
-    return () => {
-      document.body.classList.remove('control', 'desktop')
-    }
-  }, [mode, desktop])
 
   // A co-host's operation lands in the same stack the compositor puts on air.
   const applyRemoteOp = useCallback((op: CollabOp) => {
@@ -224,10 +150,12 @@ export default function App() {
   const { status: broadcastStatus, setStream: publishStream } = broadcast
   const { captureStream } = audio
 
-  // Stream-out samples the same element the stage shows, so what goes to a
-  // platform is exactly the program viewers would see.
+  // Stream-out publishes the very stream the viewers get, so what leaves the
+  // studio is the program — the same composite, strokes and corners included.
+  // Before the compositor has a picture, the raw selected source stands in, which
+  // is what a browser without canvas capture will always be using.
   const stream = useStreamOut({
-    source: liveRef,
+    program: composited ?? selected?.stream ?? null,
     audio: selected ? captureStream() : null,
     onAirChange: setStreamOn,
   })
@@ -465,41 +393,11 @@ export default function App() {
             replay={replay}
             broadcast={broadcast}
             canBroadcast={selected !== null}
-            desktop={desktop}
-            controlMode={controlMode}
-            mode={mode}
-            onMode={changeMode}
             stream={stream}
           />
         </main>
       </div>
 
-      {/* One line of news from outside: a newer version exists. Only ever on
-          screen inside a shell, and only until it is answered. */}
-      <UpdateNotice update={updates} />
-
-      {/* The only thing left on screen in Control mode: the way back out.
-          Everything else is out of the way by design there, and the window is
-          ignoring the pointer, so this has to be text — but a window that
-          cannot be clicked can still be read. */}
-      {mode === 'control' && (
-        <p className="control-hint" data-testid="control-hint">
-          {escapeHint(platformName())}
-        </p>
-      )}
-
-      {/* Desktop-only: mobile and tablet viewports get this instead of the app. */}
-      <div className="unsupported" data-testid="unsupported-notice">
-        <h1>Open Telestrator is a desktop app</h1>
-        <p>
-          The browser studio needs a desktop screen. On a phone or a tablet, get the
-          Android app; on Windows, macOS or Linux there is a desktop app as well. Both
-          are free, and both are on the releases page.
-        </p>
-        <a className="btn" href={RELEASES_URL} target="_blank" rel="noreferrer">
-          Get the app
-        </a>
-      </div>
     </>
   )
 }

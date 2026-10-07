@@ -18,7 +18,7 @@ export interface MediaCapture {
   /**
    * Whether this platform has a screen/tab picker at all. A control that offers
    * a capability the platform does not have should not be drawn, so the picker
-   * asks this rather than guessing from the shell it is in.
+   * asks this rather than guessing from the device it is on.
    */
   supported: boolean
   stream: MediaStream | null
@@ -38,10 +38,10 @@ const DISPLAY_CONSTRAINTS: DisplayMediaStreamOptions = {
 /**
  * Whether a screen or tab can be captured here.
  *
- * The rule is the capability, not which shell is hosting us: `getDisplayMedia`
- * is absent from Android's WebView — and from any webview that simply does not
- * implement it — so a control offering a tab picker on such a platform would be
- * a button that can only fail. Where the browser has it, the web app offers it
+ * The rule is the capability, not the device: every phone browser has not had
+ * `getDisplayMedia` for long, and `navigator.mediaDevices` may carry anything —
+ * so a control offering a tab picker where the browser has no picker would be a
+ * button that can only fail. Where the browser has it, the web app offers it
  * exactly as before. `devices` is passed in rather than read from `navigator`
  * so the rule stays a pure one that can be tested.
  */

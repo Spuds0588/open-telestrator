@@ -4,7 +4,6 @@ import {
   Highlighter,
   Joystick,
   ListVideo,
-  MousePointer2,
   Pencil,
   Radio,
   Rewind,
@@ -28,8 +27,6 @@ import type { Tool } from '../lib/telestration'
 
 /** The rail: one glyph per panel, exhaustive by type. */
 export const PANEL_ICONS: Record<PanelId, LucideIcon> = {
-  // An arrow cursor, because the panel is about where the pointer goes.
-  control: MousePointer2,
   draw: Pencil,
   input: ListVideo,
   audio: SlidersVertical,

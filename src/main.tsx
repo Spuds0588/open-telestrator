@@ -16,10 +16,15 @@ const params = new URLSearchParams(window.location.search)
 const isCameraman = params.has(CAMERA_PARAM)
 const isViewer = params.has(WATCH_PARAM)
 
-// The desktop build never registers the worker: inside the shell it is a cache
-// to invalidate rather than an offline story, because the app is installed
-// rather than visited. The import stays as it is so the module always resolves.
-if (import.meta.env.PROD && import.meta.env.MODE !== 'desktop') {
+// The worker is registered in the built app only. In dev it would cache the
+// studio under itself and serve that stale copy back on the next reload.
+//
+// `registerSW` does the updating too, when the build is an `autoUpdate` one: it
+// reloads the page once a new worker activates, so an installed studio cannot be
+// left running a bundle from months ago. That only works because the build asks
+// for `skipWaiting` and `clientsClaim` (see `vite.config.ts`) — without them the
+// new worker waits for an open page to close, which on a phone may be never.
+if (import.meta.env.PROD) {
   registerSW({ immediate: true })
 }
 

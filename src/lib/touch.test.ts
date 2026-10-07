@@ -8,7 +8,6 @@ import {
   isStylus,
   layoutFor,
   strokeWidth,
-  type ShellMode,
 } from './touch'
 
 /** Real user agents, because the whole rule is about telling them apart. */
@@ -23,36 +22,49 @@ const UA = {
   linux: 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
 }
 
-const layout = (mode: ShellMode, userAgent: string, width: number, height: number, touch: boolean) =>
-  layoutFor({ mode, userAgent, width, height, touch })
+const layout = (userAgent: string, width: number, height: number, touch: boolean) =>
+  layoutFor({ userAgent, width, height, touch })
 
 describe('which shape of device this is', () => {
   it('reads the user agent the way the devices write it', () => {
-    expect(detectFormFactor('desktop', UA.androidPhone, { width: 412, height: 915 })).toBe('phone')
-    expect(detectFormFactor('mobile', UA.androidTablet, { width: 1280, height: 800 })).toBe('tablet')
-    expect(detectFormFactor('mobile', UA.ipad, { width: 820, height: 1180 })).toBe('tablet')
-    expect(detectFormFactor('mobile', UA.iphone, { width: 390, height: 844 })).toBe('phone')
-    expect(detectFormFactor('desktop', UA.linux, { width: 1440, height: 900 })).toBe('desktop')
+    expect(detectFormFactor(UA.androidPhone, { width: 412, height: 915 })).toBe('phone')
+    expect(detectFormFactor(UA.androidTablet, { width: 1280, height: 800 })).toBe('tablet')
+    expect(detectFormFactor(UA.ipad, { width: 820, height: 1180 })).toBe('tablet')
+    expect(detectFormFactor(UA.iphone, { width: 390, height: 844 })).toBe('phone')
+    expect(detectFormFactor(UA.linux, { width: 1440, height: 900 })).toBe('desktop')
   })
 
-  it('falls back to the short side when the user agent says nothing', () => {
-    // A phone shell whose webview reports a desktop user agent, and a Windows
-    // tablet in the desktop shell, both land here.
-    expect(detectFormFactor('mobile', UA.linux, { width: 412, height: 915 })).toBe('phone')
-    expect(detectFormFactor('mobile', UA.linux, { width: 800, height: 1280 })).toBe('tablet')
-    expect(detectFormFactor('desktop', UA.linux, { width: 412, height: 915 })).toBe('desktop')
+  it('takes a silent user agent for a desktop, whatever shape the window is', () => {
+    // The short side used to stand in for a phone here, because a phone shell
+    // could report a desktop webview. There is no shell now, so a narrow window
+    // is a narrow window: a phone in a browser always says what it is, and a
+    // mouse-driven one keeps the rail it has always had.
+    expect(detectFormFactor(UA.linux, { width: 412, height: 915 })).toBe('desktop')
+    expect(detectFormFactor(UA.linux, { width: 800, height: 1280 })).toBe('desktop')
+    expect(detectFormFactor('', { width: 412, height: 915 })).toBe('desktop')
   })
 })
 
 describe('the layout for a viewport', () => {
-  it('applies nothing in a browser, phone or not', () => {
-    // The web build is still desktop-only: a phone gets the notice, not this.
-    expect(layout('browser', UA.androidPhone, 390, 844, true)).toBeNull()
-    expect(layout('browser', UA.linux, 1920, 1080, false)).toBeNull()
+  it('gives a phone in a browser the studio, laid out for a hand', () => {
+    // The case this all exists for: there is no app to send a phone to any more,
+    // so a phone gets the rail along the bottom and a sheet for the panel.
+    expect(layout(UA.androidPhone, 390, 844, true)).toEqual({
+      form: 'phone',
+      orientation: 'portrait',
+      rail: 'bottom',
+      panel: 'sheet',
+      touch: true,
+    })
+    expect(layout(UA.iphone, 844, 390, true)).toMatchObject({
+      form: 'phone',
+      orientation: 'landscape',
+      rail: 'bottom',
+    })
   })
 
-  it('leaves the desktop shell exactly as it is', () => {
-    const desktop = layout('desktop', UA.linux, 1440, 900, false)
+  it('leaves a desktop browser exactly as it is', () => {
+    const desktop = layout(UA.linux, 1440, 900, false)
     expect(desktop).toEqual({
       form: 'desktop',
       orientation: 'landscape',
@@ -63,29 +75,30 @@ describe('the layout for a viewport', () => {
   })
 
   it('keeps the side rail on a narrow mouse-driven window', () => {
-    // The shell's own minimum is 960 wide; a mouse keeps the rail it knows.
-    const narrow = layout('desktop', UA.linux, 980, 700, false)
-    expect(narrow?.rail).toBe('side')
-    expect(narrow?.form).toBe('desktop')
+    // A window somebody chose, however narrow: the rail stays where it was and
+    // the stage gets the rest.
+    const narrow = layout(UA.linux, 980, 700, false)
+    expect(narrow.rail).toBe('side')
+    expect(narrow.form).toBe('desktop')
   })
 
-  it('sizes for a fingertip anywhere a touch device is running', () => {
-    expect(layout('desktop', UA.linux, 1440, 900, true)?.touch).toBe(true)
-    expect(layout('mobile', UA.ipad, 1180, 820, true)?.touch).toBe(true)
+  it('sizes for a fingertip wherever the pointer is coarse', () => {
+    expect(layout(UA.linux, 1440, 900, true).touch).toBe(true)
+    expect(layout(UA.ipad, 1180, 820, true).touch).toBe(true)
   })
 
   it('treats a held device as a held device even when the pointer says otherwise', () => {
     // A tablet with a detachable keyboard, or a webview that answers
     // `pointer: coarse` with false, is still held: it gets the bar and the
     // fingertip sizes rather than a 92px rail and a 280px column.
-    expect(layout('mobile', UA.ipad, 820, 1180, false)).toMatchObject({
+    expect(layout(UA.ipad, 820, 1180, false)).toMatchObject({
       form: 'tablet',
       rail: 'bottom',
       panel: 'sheet',
       touch: true,
     })
     // A mouse-driven window is not: it keeps the layout it has always had.
-    expect(layout('desktop', UA.linux, 900, 700, false)).toMatchObject({
+    expect(layout(UA.linux, 900, 700, false)).toMatchObject({
       form: 'desktop',
       rail: 'side',
       touch: false,
@@ -94,21 +107,21 @@ describe('the layout for a viewport', () => {
 
   it('puts the rail along the bottom when the side rail would cost the stage', () => {
     // Tablet, portrait: 820 is not enough for a 280px panel and a stage.
-    expect(layout('mobile', UA.ipad, 820, 1180, true)).toMatchObject({
+    expect(layout(UA.ipad, 820, 1180, true)).toMatchObject({
       form: 'tablet',
       orientation: 'portrait',
       rail: 'bottom',
       panel: 'sheet',
     })
     // The same tablet turned: room for both.
-    expect(layout('mobile', UA.ipad, 1180, 820, true)).toMatchObject({
+    expect(layout(UA.ipad, 1180, 820, true)).toMatchObject({
       orientation: 'landscape',
       rail: 'side',
       panel: 'column',
     })
     // A phone, either way up, always gets the bar.
-    expect(layout('mobile', UA.androidPhone, 390, 844, true)?.rail).toBe('bottom')
-    expect(layout('mobile', UA.androidPhone, 844, 390, true)?.rail).toBe('bottom')
+    expect(layout(UA.androidPhone, 390, 844, true).rail).toBe('bottom')
+    expect(layout(UA.androidPhone, 844, 390, true).rail).toBe('bottom')
   })
 
   it('answers for the awkward shapes rather than crashing on them', () => {
@@ -122,21 +135,20 @@ describe('the layout for a viewport', () => {
       [720, 1440], // a phone mirrored into a portrait monitor
     ]
     for (const [width, height] of awkward) {
-      const result = layout('mobile', UA.androidTablet, width, height, true)
-      expect(result).not.toBeNull()
-      expect(result?.orientation).toBe(height > width ? 'portrait' : 'landscape')
-      expect(['side', 'bottom']).toContain(result?.rail)
+      const result = layout(UA.androidTablet, width, height, true)
+      expect(result.orientation).toBe(height > width ? 'portrait' : 'landscape')
+      expect(['side', 'bottom']).toContain(result.rail)
       // The rail and the panel are always the same decision: the panel is a
       // column exactly when the rail is beside the stage.
-      expect(result?.panel).toBe(result?.rail === 'side' ? 'column' : 'sheet')
-      expect(result?.touch).toBe(true)
+      expect(result.panel).toBe(result.rail === 'side' ? 'column' : 'sheet')
+      expect(result.touch).toBe(true)
     }
   })
 
   it('switches the rail over at the width it says it does', () => {
-    const at = (width: number) => layout('mobile', UA.ipad, width, 800, true)
-    expect(at(SIDE_RAIL_MIN_WIDTH)?.rail).toBe('side')
-    expect(at(SIDE_RAIL_MIN_WIDTH - 1)?.rail).toBe('bottom')
+    const at = (width: number) => layout(UA.ipad, width, 800, true)
+    expect(at(SIDE_RAIL_MIN_WIDTH).rail).toBe('side')
+    expect(at(SIDE_RAIL_MIN_WIDTH - 1).rail).toBe('bottom')
   })
 
   it('keeps a control big enough for a fingertip', () => {

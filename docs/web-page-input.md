@@ -19,6 +19,16 @@
 > readable and capturable after all — the cheapest route was right the first time.
 > Element capture is primary again and the fragment tee is the WebKit fallback;
 > *What has been measured* has both runs.
+>
+> **Since then the ground moved under the plan.** The desktop and Android shells
+> have been removed entirely: there is one web build now, no Tauri, no WebView,
+> no APK, and `src-tauri/` no longer exists. So the "internal browser" option
+> below — an owned webview as the capture surface — is off the table, and every
+> passage that assumes a shell (what a WebView does and does not expose, the
+> Android screen-capture route, the Kotlin plugin) is now history rather than a
+> plan. What survives is the part that was measured in a browser: element capture
+> works on an MSE page and the fragment tee does not work in Safari or WebKitGTK.
+> Read the rest as research, not as a roadmap.
 
 ## The gap
 

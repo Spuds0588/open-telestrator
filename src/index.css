@@ -757,52 +757,6 @@ body {
   height: 14px;
 }
 
-/* Control mode, in the desktop shell only.
-
-   The window has been told to ignore cursor events, so the pointer belongs to
-   whatever is underneath. For that to be useful the window has to stop being a
-   picture of the thing underneath it and become a clear pane instead: the
-   chrome steps aside here, and the shell's own window is transparent.
-
-   `pointer-events: none` is the second lock on the door — the OS should never
-   deliver an event, but a stray drag that somehow arrives must not be able to
-   commit a stroke nobody drew. Strokes already on air stay on air: the mode
-   touches nothing about the compositor. */
-body.control,
-body.control #root,
-body.control .app,
-body.control .stage,
-body.control .screen {
-  background: transparent;
-}
-
-body.control .rail,
-body.control .panel,
-body.control .stage {
-  opacity: 0;
-  pointer-events: none;
-}
-
-/* The one thing that survives Control mode: how to leave it. Everything else is
-   out of the way, and the window is ignoring the pointer, so this is a line of
-   text rather than a control — visible, and taking no pointer of its own. */
-.control-hint {
-  position: fixed;
-  left: 50%;
-  bottom: 16px;
-  transform: translateX(-50%);
-  z-index: 40;
-  margin: 0;
-  padding: 5px 12px;
-  border: 1px solid rgb(255 255 255 / 0.14);
-  border-radius: 999px;
-  background: rgb(10 12 16 / 0.78);
-  color: #f4f6f8;
-  font-size: 12px;
-  line-height: 1.4;
-  pointer-events: none;
-}
-
 .side-hint {
   font-size: 10px;
   color: var(--muted);
@@ -1712,147 +1666,13 @@ body.control .stage {
   }
 }
 
-/* ── The update prompt ─────────────────────────────────────
-   One line of news from outside, over the top of the studio. A card rather
-   than a panel because it belongs to no group: it arrives once, some seconds
-   after launch, and it can be switched off for good from inside itself. */
-.updates {
-  position: fixed;
-  top: max(14px, env(safe-area-inset-top));
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 40;
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  width: min(540px, calc(100vw - 24px));
-  padding: 14px;
-  background: var(--panel-2);
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  box-shadow: var(--shadow);
-}
-
-.updates__icon {
-  display: flex;
-  flex: none;
-  color: var(--accent);
-}
-
-.updates__icon svg {
-  width: 20px;
-  height: 20px;
-}
-
-.updates__body {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  gap: 6px;
-  min-width: 0;
-}
-
-.updates__title {
-  margin: 0;
-  font-size: 14px;
-  font-weight: 600;
-}
-
-.updates__sub,
-.updates__notes {
-  margin: 0;
-  font-size: 12px;
-  color: var(--muted);
-}
-
-/* Release notes are context, not a changelog: a few lines at most. */
-.updates__notes {
-  max-height: 4.6em;
-  overflow: hidden;
-}
-
-.updates__error {
-  margin: 0;
-  font-size: 12px;
-  color: var(--accent);
-}
-
-.updates__actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 4px;
-}
-
-/* The opt-out lives in the prompt, so it can be answered where it is decided.
-   The row is a control in its own right and is sized like one. */
-.updates__mute {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-height: 44px;
-  font-size: 12px;
-  color: var(--muted);
-  cursor: pointer;
-}
-
-.updates__mute input {
-  width: 18px;
-  height: 18px;
-  flex: none;
-  accent-color: var(--accent);
-}
-
-.updates__close {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex: none;
-  width: 40px;
-  height: 40px;
-  margin: -8px -8px 0 0;
-  padding: 0;
-  border: 0;
-  border-radius: 8px;
-  background: none;
-  color: var(--muted);
-  cursor: pointer;
-}
-
-.updates__close:hover {
-  color: var(--text);
-  background: var(--panel-3);
-}
-
-.updates__close svg {
-  width: 18px;
-  height: 18px;
-}
-
-/* The answer to a check the operator started themselves: one line, no actions. */
-.updates--quiet {
-  align-items: center;
-}
-
-.updates--quiet .updates__quiet-text {
-  flex: 1;
-  font-size: 13px;
-  color: var(--muted);
-}
-
-/* A window that ignores the pointer cannot be answered, so in Control mode the
-   prompt steps out of the way with the rest of the chrome. */
-body.control .updates {
-  display: none;
-}
-
 /* ── Touch: a finger, a stylus, and a viewport that is not a window ──
-   Everything here hangs off the attributes `useLayout` puts on the body, and
-   only inside a shell: the web build keeps its desktop-only notice. The rules
+   Everything here hangs off the attributes `useLayout` puts on the body, and a
+   phone in a browser is a first-class way to run the studio. The rules
    themselves are in `src/lib/touch.ts`. */
 
-/* A finger draws, so the canvas must not also be a scrolling surface; Android
-   and iOS otherwise answer a drag with a pan, or a long press with a menu. */
+/* A finger draws, so the canvas must not also be a scrolling surface; a phone
+   otherwise answers a drag with a pan, or a long press with a menu. */
 body.touch .overlay__canvas {
   touch-action: none;
   -webkit-user-select: none;
@@ -1877,8 +1697,7 @@ body.touch .icon-btn {
 }
 
 body.touch .rail,
-body.touch .panel,
-body.touch .updates__actions .btn {
+body.touch .panel {
   touch-action: manipulation;
 }
 
@@ -1978,49 +1797,4 @@ body[data-layout='compact'] .panel {
      than the space a phone on its side has left for them. */
   flex: 0 1 auto;
   min-height: 88px;
-}
-
-/* ── Desktop only: phones and tablets get a notice ───────── */
-.unsupported {
-  display: none;
-}
-
-/* Inside a shell the studio is what is on screen, however narrow the window:
-   the notice is for a phone *browser*, where the studio genuinely cannot run.
-   Without this a desktop window resized below 1024 — the shell's own minimum is
-   960 — would replace the studio with an invitation to download it. */
-body.desktop .app {
-  display: flex;
-}
-
-body.desktop .unsupported {
-  display: none;
-}
-
-@media (max-width: 1024px) {
-  .app {
-    display: none;
-  }
-
-  .unsupported {
-    height: 100%;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 14px;
-    padding: 32px;
-    text-align: center;
-  }
-
-  .unsupported h1 {
-    margin: 0;
-    font-size: 20px;
-  }
-
-  .unsupported p {
-    margin: 0;
-    max-width: 44ch;
-    color: var(--muted);
-  }
 }

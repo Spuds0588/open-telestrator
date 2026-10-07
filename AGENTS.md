@@ -2,7 +2,9 @@
 
 Free & open-source sports telestrator and P2P broadcasting studio. React + Vite +
 TypeScript, no backend: the static bundle deploys to GitHub Pages and all
-transport is PeerJS/WebRTC.
+transport is WebRTC — PeerJS for the viewer tree and the cameraman link, WHIP for
+publishing the program out to a live platform. There are no native shells any
+more, on any platform, and nothing to download: the page is the app.
 
 ## Clean up between jobs
 
@@ -23,10 +25,10 @@ found it, and say in your summary what you cleaned.
 2. **Remove build output and caches:**
 
    ```bash
-   npm run clean   # dist, dev-dist, coverage, *.tsbuildinfo, Vite/Vitest caches, Gradle output
+   npm run clean   # dist, dev-dist, coverage, *.tsbuildinfo, Vite/Vitest caches
    ```
 
-   `dist/` is a build artifact and is regenerable — do not treat it as a
+   `dist/` is a build artifact and regenerable — do not treat it as a
    deliverable to keep, and never commit it.
 3. **Delete one-off scratch work.** Probe scripts, captured screenshots, log
    dumps, temporary fixtures and half-written notes go as soon as they have
@@ -52,70 +54,24 @@ found it, and say in your summary what you cleaned.
 
 ```bash
 npm run dev        # dev server (http://localhost:5173)
-npm test           # Vitest, run once (269 tests)
+npm test           # Vitest, run once (212 tests)
 npm run typecheck  # tsc --noEmit
 npm run build      # typecheck + production build (also emits the service worker)
 npm run preview    # serve the production build
-npm run clean      # remove build output and caches (leaves src-tauri/target alone)
+npm run clean      # remove build output and caches
 ```
 
-The Rust half of the desktop build has its own commands. The publisher is a
-member crate on purpose, so its tests run without Tauri's dependency tree
-anywhere near them:
-
-```bash
-npm run desktop            # the shell, with hot reload in the webview
-npm run desktop:build      # the standalone executable for this platform
-node src-tauri/macos/bundle.mjs --binary <path>   # macOS only: the .app the release ships
-npm run android            # the phone build, on a device (needs the SDK; docs/android.md)
-npm run android:build      # the APK and the AAB
-cargo build                # in src-tauri/
-cargo test --workspace     # both members: 63 media tests, 5 shell tests
-cargo test -p telestrator-media     # AMF0, FLV, chunk framing, RTMP, TLS
-cargo test -p open-telestrator      # the frame wire format the shell parses
-```
+`npm run dev` serves the landing page at `/` and the studio at `/app.html`.
 
 `npm run build` runs the typecheck first, and `.github/workflows/deploy-pages.yml`
-runs the tests before building, so a failing test blocks the deploy to prod. The
-workflow does not build the desktop app, so a Rust change is only as verified as
-what you ran locally. `.github/workflows/desktop-release.yml` does build it, on
-all three platforms at once, but only from a `v*` tag — `v0.1.0` was its first
-run and `v0.1.1` its second, each time with all three jobs producing their asset.
-It labels the Windows and macOS assets `-beta` and still files only a **draft**:
-publishing is the one step left to a person. The workflow is also the only place
-the macOS `.app` is assembled, so a change there is unverified until a tag —
-`docs/tauri-desktop.md` records what the v0.1.1 log showed and what still needs
-somebody with a Mac. Its `--notes` paragraph is one paragraph that must fit
-`NOTES_LIMIT` (320) after `notesSummary` flattens it, because the app's update
-prompt shows exactly that much; it measures 297, and a word added to it is a
-number to measure rather than guess.
+runs the tests before building, so a failing test blocks the deploy to prod. That
+workflow is the only one left: it is a static front end and there is no binary to
+release.
 
-**Nobody has held an Android build yet, and the first attempt failed in a way
-worth remembering.** The APK has been built, signed, verified and driven on an
-emulated tablet, but the one session on a real phone ended with every input
-silently doing nothing, and the phone browser that was tested alongside it was
-serving a months-old bundle. `docs/android-testing.md` is the procedure for the
-next attempt: prove the installed version and the bundle hash before believing
-any symptom, use a build whose WebView can actually be inspected (a release APK
-cannot — wry only calls `setWebContentsDebuggingEnabled` under
-`debug_assertions` or the `devtools` feature, and the generated Kotlin `Logger`
-is gated on `BuildConfig.DEBUG`, so a release build logs nothing either), run
-the capability probe, and then test one input at a time. The shell carries an
-opt-in `devtools` feature for the release-shaped case.
-
-The APK's bundle is compiled into `libopen_telestrator_lib.so` rather than
-fetched, so an APK contains exactly one bundle and a stale-bundle symptom inside
-the shell can only mean a stale APK.
-
-**The Android APK is built and signed where the keystore is, never by CI.**
-`keystore.properties` in `src-tauri/gen/android` is gitignored and points at a
-keystore outside the repository; `app/build.gradle.kts` reads it and wires the
-release signing config, and without it a release build is unsigned rather than
-failing. Anyone holding that key can sign an APK that installs over this one, so
-it does not go in the repository and does not go in an Actions secret — the APK
-is therefore uploaded to the release by hand, and its asset label says what it
-is. `v0.1.1` carries the first signed one; release is the *default* for
-`tauri android build`, and `--release` is an error.
+There is **no phone build and no desktop build** to run. One bundle is every
+entry, and the phone layout is a viewport decision inside it — shrink a browser
+window, or open one with device emulation on, and you are looking at the same
+code a phone gets.
 
 ## Conventions
 
@@ -123,8 +79,9 @@ is. `v0.1.1` carries the first signed one; release is the *default* for
   (hooks, `use*` modules) and components stay thin. Anything that broke once —
   source merging, camera links, stroke geometry, replay rotation, error
   classification, peer config, the broadcast protocol, compositor geometry,
-  media-feed classification, hardware mappings, shared-drawing operations — has
-  unit tests; keep it that way when you change those paths.
+  media-feed classification, hardware mappings, shared-drawing operations, the
+  WHIP request shapes — has unit tests; keep it that way when you change those
+  paths.
 - **The stage is the program.** While broadcasting, `useProgramCompositor`
   redraws the stage — video, live corner, corner camera, strokes — into the one
   canvas stream viewers receive, so drawings and overlays are on air. Draw
@@ -171,41 +128,41 @@ is. `v0.1.1` carries the first signed one; release is the *default* for
   barrel is tree-shaken, so the rest of the set never reaches the bundle.
   Sizing lives in `index.css` (`.chip svg`, `.icon-btn svg`, `.rail__icon`), so a
   new control inherits it instead of setting its own width.
-- **The web app is desktop-only; the *shell* is not.** A phone or tablet in a
-  browser still gets the unsupported notice pointing at GitHub releases, and the
-  cameraman (`?camera=`) and viewer (`?watch=`) entries — code-split in
-  `src/main.tsx` — must keep working there. Inside the Android shell (see
-  [docs/android.md](docs/android.md)) that notice is replaced by the studio, and
-  only there: `body.desktop` is what swaps them, and a shell sets it for any
-  narrow window, which is also what keeps a desktop window resized below 1024
-  from inviting the operator to download what they are already running. A control
-  the platform cannot honour is not drawn: the Add input picker offers its
-  screen/tab row only where `getDisplayMedia` exists (`canShareScreen` in
-  `src/lib/capture.ts`), so an Android build never shows a button that can only
-  fail. The rule is the capability, not the shell, so a desktop webview without
-  the API is treated the same way.
+- **Supporting phones is a viewport decision, not a second build.** There is no
+  unsupported-device notice and no `body.desktop`: the cameraman (`?camera=`) and
+  viewer (`?watch=`) entries — code-split in `src/main.tsx` — were always reachable
+  on any device, and the studio now is too. A control the platform cannot honour is
+  still not drawn: the Add input picker offers its screen/tab row only where
+  `getDisplayMedia` exists (`canShareScreen` in `src/lib/capture.ts`), so a phone
+  that cannot share its screen never shows a button that can only fail. The rule is
+  the capability, not the device.
 - **Touch and stylus rules live in `src/lib/touch.ts`, with tests.** Form factor,
   the rail-against-sheet layout, pressure on a stroke and palm rejection are all
   decided there and asked for by the components; the CSS hangs off
-  `body[data-layout]` and `body.touch`, which only `useLayout` sets. New controls
-  aim for `MIN_TARGET` (44px) on the short side — the floor of 40 is the worst
-  case, not the target.
-- **The shell is a library with a two-line binary.** `src-tauri/src/lib.rs` holds
-  `run()`, because Android needs `mobile_entry_point` on a function its activity
-  can call; `main.rs` only calls it. Everything a phone cannot use — the tray, the
-  global shortcut, the whole of Control mode — is `#[cfg(desktop)]`,
-  so one shell serves both without a second copy of anything. That cfg has to
-  cover what those pieces *use* as well as the pieces themselves: an import or a
-  `const` left outside it is dead code on Android, and
-  `cargo check --target aarch64-linux-android` is what says so.
-- **`src-tauri/gen/android` is committed source, not a cache.** `tauri android
-  init` writes it once and it is edited like anything else — and it does need
-  editing: the generator does not add the camera and microphone permissions, and
-  without them `getUserMedia` is refused before a dialog can appear. Its own
-  `.gitignore` files already exclude the Gradle output, the copied `jniLibs` and
-  the generated `tauri.conf.json`, so `git status` stays honest; a real keystore
-  belongs in `keystore.properties`, which is ignored too, and `*.jks` and
-  `*.keystore` are ignored there in case one is ever generated by mistake.
+  `body[data-layout]` and `body.touch`, which only `useLayout` sets.
+  `layoutFor` always returns a layout — there is no shell to defer to — and a user
+  agent that says nothing is taken for a desktop, so a narrow mouse-driven window
+  keeps its side rail. New controls aim for `MIN_TARGET` (44px) on the short side —
+  the floor of 40 is the worst case, not the target.
+- **Stream-out is WHIP, and it is all in `src/lib/whip.ts`.** The program leaves as
+  one `POST` of an SDP offer (`Content-Type: application/sdp`) to a service that
+  accepts WebRTC and forwards; the answer comes back in the body with a `Location`
+  header, and stopping is a `DELETE` of that resource (RFC 9725). `WHIP_SERVICES`
+  is the table of the three routes — Restream is the default because it is the one
+  that reaches YouTube and Twitch and takes WHIP on a free plan. Nothing here may
+  assume a cross-origin `POST` will be allowed: the service has to permit it, and
+  a refusal is reported rather than retried forever. `whipPost` and `whipDelete`
+  are the only two functions that touch the network and both take the `fetch` to
+  use, which is what keeps the rest testable without a connection.
+- **The publish URL is a credential.** For Restream and Cloudflare the secret is
+  part of the address, so it is masked on screen and never logged; a bearer token,
+  where a service wants one, is treated the same way. Do not put either in a
+  build-time variable or a URL parameter.
+- **Not everything is reachable.** A platform's own ingest speaks RTMP, which a
+  browser cannot open a socket for, so stream-out only works through a forwarding
+  service; RTSP and RTMP as *inputs* cannot be played in a browser at all and are
+  refused with a notice (`src/lib/mediaFeeds.ts`). Say both plainly rather than
+  implying the app can dial a platform directly.
 - **Two pages, one build.** `index.html` is the static landing page — its own
   `src/home.css`, no app bundle, and copy written for search and answer engines.
   `app.html` is the studio and serves every other entry; it is `noindex`. Every
@@ -218,97 +175,19 @@ is. `v0.1.1` carries the first signed one; release is the *default* for
   `src/lib/broadcast.ts`), so an embed needs no URL parameter; the `embed`
   parameter stays as an explicit override. Keep that logic in the lib with its
   tests rather than reading `window` in the component.
-- **Click-through "Control" mode belongs to the Tauri build, not this one**, where
-  the canvas always draws and never passes input to the page underneath. The
-  desktop build has it: one window made to ignore cursor events
-  (`src/lib/controlMode.ts` for the rules, `src-tauri/src/control.rs` for the
-  window call), with the global shortcut, the tray icon and the rail's own switch
-  as the ways back out. It is deliberately **one** window, not two — the stroke
-  stack, the display capture and the broadcast all live in one webview, and
-  splitting them across windows would fork the strokes. Streaming the program out
-  to an RTMP platform is the shell's other addition. See
-  [docs/tauri-desktop.md](docs/tauri-desktop.md).
-- **The Linux webview is WebKitGTK, and WebKitGTK has no WebRTC.**
-  `RTCPeerConnection` is `undefined` there, `enable-webrtc` is a no-op (verified
-  with the setting on, over a secure origin, in every way it can be set), and the
-  library links no GStreamer WebRTC backend. Upstream's answer is to rebuild
-  WebKitGTK with `-DENABLE_WEB_RTC=ON` (tauri-apps#8426). So on Linux, in the
-  engine as it ships, **broadcasting, the viewer, the cameraman link and co-host
-  drawing cannot work at all** — only Control mode, the tray and the RTMP
-  stream-out can. Do not test P2P features against the Linux shell, and do not
-  promise them on Linux. Two more measured facts from the same probe: the engine
-  *does* expose `canvas.captureStream` and MP4/H.264, and it does **not** accept
-  `video/mp2t` as a media source, so an HLS playlist of TS segments cannot play
-  there. The whole matrix is in `docs/tauri-desktop.md`.
-- **A webview refuses the camera unless the embedder answers for it.** On Linux
-  there is no default prompt to fall back on: WebKitGTK's `permission-request`
-  signal goes unanswered and `getUserMedia` fails with `NotAllowedError`. The
-  shell sets a handler in `run()` that allows Camera, Microphone and
-  DisplayCapture and leaves everything else to the platform. The matching rule
-  for the web side is `canShareScreen` — the capability, not the shell.
-- **Control mode must never be enterable without a way out.** A click-through
-  window cannot be clicked, so the exits are the global shortcut and the tray —
-  and a tray icon is not something every desktop draws (GNOME needs an
-  extension). `control.rs` therefore refuses to enter the mode until the
-  shortcut is bound, and `control_offered` is what the rail asks before drawing
-  the tile; a shell that cannot get out of the mode does not offer it. The
-  window also carries the way back on screen (`escapeHint`) while in the mode,
-  because text is the one control that survives it.
-- **Nothing outside `src/lib/desktop.ts` may ask whether we are in the shell.**
-  Every other module asks it, so the browser keeps behaving identically and its
-  tests keep proving it. `@tauri-apps/api` is imported lazily inside it, so the
-  Pages bundle never carries the shell's API.
-- **The desktop-only rail tile comes from `desktopPanels(controlMode)`**, never
-  from mutating `PANELS`. `panels.test.ts` proves the two rosters differ only by
-  Control at the head, so the web build keeps its seven tiles and a phone build —
-  which has no second window to pass a click to — gets the same seven.
-- **The updater is opt-out, and the opt-out is not a one-way door.** Rules in
-  `src/lib/updates.ts` with tests: the preference lives under
-  `open-telestrator.updates.notify`, an unreadable value means "tell me", and
-  `shouldPrompt` lets a check the operator asked for through even when
-  announcements are off — that is the way back, from the tray. A check that finds
-  nothing, or cannot reach GitHub, says nothing. The release body is what the
-  prompt shows, flattened and cut at `NOTES_LIMIT` (320) characters, so the
-  workflow writes the notes as one paragraph that fits — a truncated sentence is
-  the one place an operator reads the instruction they need.
-- **The desktop app is one standalone executable, and there is no installer on
-  any platform.** `bundle.active` is `false`, so `tauri build` leaves
-  `src-tauri/target/release/open-telestrator` and no AppImage, `.deb`, MSI or
-  `.dmg`; there is no signing key to generate or lose, and no `latest.json` to
-  host. That is a deliberate trade, not an omission: nothing installs itself, so
-  a newer version is *news and a link* — the GitHub API's `releases/latest`, with
-  the release page handed to the system's browser through the opener plugin,
-  whose capability allows that one address and nothing else. A phone is left out
-  of the check on purpose (a release carries desktop binaries and an APK would
-  come from a store), which is why `useUpdates` asks `shellMode()` rather than
-  `isDesktop()`.
-- **The macOS download is a hand-assembled `.app`, not a Tauri bundle.** macOS
-  only asks for camera, microphone and screen-recording permission on behalf of a
-  bundle with the right `Info.plist` strings, and a bare executable is a Mac build
-  that can neither see nor hear — so `src-tauri/macos/bundle.mjs` writes the
-  bundle from the built binary, `src-tauri/macos/Info.plist` and `icons/icon.icns`,
-  filling the product name, identifier and version in from `tauri.conf.json`, and
-  the release workflow lints it with `plutil`, signs it **ad-hoc** (`codesign
-  --sign -`, no certificate and no Apple account, ever) and zips it with `ditto`.
-  The script refuses to write a bundle whose usage strings are gone — that
-  failure is invisible until a Mac user hits it. `bundle.active` stays `false`:
-  this is packaging the same standalone binary, not installing it.
-- **`src-tauri/media` has exactly one dependency, on purpose.** The RTMP
-  publisher is hand-rolled — AMF0, FLV tag bodies, chunk framing — so its 63 tests
-  run in a few seconds with no server and no network. TLS is the exception and
-  could not be hand-rolled: `rustls` + `webpki-roots`, with `ring` as the crypto
-  provider, are what reach the `rtmps://` ingest that Facebook Live and Instagram
-  publish and nothing else. `src/tls.rs` makes that argument in the file; any
-  *other* crate needs the same before it lands.
-- **The frame wire format lives in two places**: `src/lib/frameHeader.ts` writes it
-  and `src-tauri/src/stream.rs` reads it, each pinned by its own tests. Change one
-  and the other fails — that is the point, so keep both in step.
-- **Encoded frames cross the IPC boundary, never pixels.** A 1080p RGBA frame is
-  megabytes before it is compressed and kilobytes after. Anything that would put
-  raw frames on that boundary needs shared memory, not a bigger call.
-- **`src-tauri/target` is a Rust build cache, not a deliverable** — gitignored,
-  and left alone by `npm run clean` because deleting it costs a two-minute
-  rebuild. `cargo clean` is there if disk matters more.
+- **The service worker updates itself, and the two options that make that work
+  are easy to lose.** A stale bundle is the failure that costs the most time to
+  diagnose, because everything looks right and nothing runs. `registerSW` in
+  `src/main.tsx` registers the worker in production and reloads on activation, but
+  it only ever gets as far as "activation" because `vite.config.ts` sets
+  `workbox.skipWaiting` and `workbox.clientsClaim` **explicitly**: the plugin
+  applies those on its own only when it injects the registration
+  (`injectRegister: 'auto'`), and this build registers from the app instead. With
+  them missing, a new worker installs and waits — nothing sends it
+  `SKIP_WAITING` — so an installed studio keeps the bundle it opened, which on a
+  phone can be days. The PWA is never `disable`d and the base path is always
+  `VITE_BASE_PATH ?? '/'`. This is the one thing to check by building twice and
+  watching a live page swap itself, not by reading the source.
 - Broadcasting is deliberately live-only: no catch-up, no synchronisation between
   viewers. A steady picture per viewer is the goal, so keep the self-healing
   paths (host sweep, viewer rejoin) intact. The *program* may contain replays
