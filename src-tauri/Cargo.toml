@@ -42,6 +42,16 @@ tauri-plugin-global-shortcut = "2"
 # Used by `tauri build` so the app loads the bundled frontend rather than a dev
 # server.
 custom-protocol = ["tauri/custom-protocol"]
+# WebView inspection in a **release** build. `tauri` turns the inspector on by
+# itself only when `debug_assertions` is set, so a release APK leaves
+# `setWebContentsDebuggingEnabled` out of the binary altogether and no
+# `chrome://inspect` window can ever attach to it. That matters on Android more
+# than anywhere: the Kotlin `Logger` is gated on `BuildConfig.DEBUG`, so a
+# release build writes nothing to logcat either, and a release-shaped build is
+# the only one that reproduces a release-shaped bug (R8, `strip`, `panic =
+# abort`). Off by default — a shipped build carries no inspector. See
+# docs/android-testing.md.
+devtools = ["tauri/devtools"]
 
 [profile.release]
 codegen-units = 1

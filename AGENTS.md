@@ -90,6 +90,23 @@ somebody with a Mac. Its `--notes` paragraph is one paragraph that must fit
 prompt shows exactly that much; it measures 297, and a word added to it is a
 number to measure rather than guess.
 
+**Nobody has held an Android build yet, and the first attempt failed in a way
+worth remembering.** The APK has been built, signed, verified and driven on an
+emulated tablet, but the one session on a real phone ended with every input
+silently doing nothing, and the phone browser that was tested alongside it was
+serving a months-old bundle. `docs/android-testing.md` is the procedure for the
+next attempt: prove the installed version and the bundle hash before believing
+any symptom, use a build whose WebView can actually be inspected (a release APK
+cannot — wry only calls `setWebContentsDebuggingEnabled` under
+`debug_assertions` or the `devtools` feature, and the generated Kotlin `Logger`
+is gated on `BuildConfig.DEBUG`, so a release build logs nothing either), run
+the capability probe, and then test one input at a time. The shell carries an
+opt-in `devtools` feature for the release-shaped case.
+
+The APK's bundle is compiled into `libopen_telestrator_lib.so` rather than
+fetched, so an APK contains exactly one bundle and a stale-bundle symptom inside
+the shell can only mean a stale APK.
+
 **The Android APK is built and signed where the keystore is, never by CI.**
 `keystore.properties` in `src-tauri/gen/android` is gitignored and points at a
 keystore outside the repository; `app/build.gradle.kts` reads it and wires the

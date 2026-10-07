@@ -196,12 +196,24 @@ APK this replaces was 138 MB, most of it an unstripped 137 MB library; this one 
    the emulated tablet put the rail along the bottom with 65px tiles, but the
    sizes a thumb actually reaches are a matter of holding the device. A stylus and
    a program pushed out to an RTMP platform from the device are the other two
-   measurements nobody has taken.
-2. **A store listing.** The APK is signed and installable over an older copy of
+   measurements nobody has taken. The first attempt on a real phone ended in
+   silence — every input did nothing — and was never diagnosed, so the procedure
+   for that session, including how to prove which build is actually on the phone
+   before believing any symptom, is written up in
+   [docs/android-testing.md](android-testing.md).
+2. **A reason for the APK to exist.** Everything a phone can be asked to do is
+   already refused by a capability check rather than by the shell, so a plain
+   phone browser gets the camera, an opened file, an HLS URL and the touch
+   layout too. Screen capture is the one thing that differs, and it is settled
+   the other way — no mobile browser and not Android's WebView has
+   `getDisplayMedia`. Stream-out to RTMP is therefore the shell's only
+   irreplaceable feature on this target, and it has never been dialled. See
+   [docs/android-testing.md](android-testing.md#step-8--the-decision-the-measurement-has-to-settle).
+3. **A store listing.** The APK is signed and installable over an older copy of
    itself, which is the part that mattered for upgrades, but a store also wants an
    AAB, a listing and — for the biggest one — a Play signing key. No AAB has been
    built or published.
-3. **An Intel Android target.** The APK carries `arm64-v8a` alone, so it installs
+4. **An Intel Android target.** The APK carries `arm64-v8a` alone, so it installs
    on a modern phone or tablet and on nothing older. A second target is a build
    flag, not a code change, and is left until there is a device that needs it.
 
@@ -235,8 +247,20 @@ APK this replaces was 138 MB, most of it an unstripped 137 MB library; this one 
 
 ## Next steps, in order
 
-1. Try it on real hardware: a stylus, a palm resting on the glass, a rotation
+1. Plug in a phone and work through
+   [docs/android-testing.md](android-testing.md), which is the procedure for the
+   session: `adb` over USB, proving the installed version and bundle before
+   trusting any symptom, a devtools-enabled build (the release APK cannot be
+   inspected and writes nothing to logcat), the capability probe that answers
+   whether `canvas.captureStream` exists inside Android's WebView, logcat tags,
+   and one input at a time.
+2. Try it on real hardware: a stylus, a palm resting on the glass, a rotation
    mid-stroke, and a program pushed out to an RTMP platform from the device.
-2. Build the AAB and write the listing — the signed APK has already proved the
+3. Build the AAB and write the listing — the signed APK has already proved the
    signing path end to end, so this is paperwork and a second artifact.
-3. Add `x86_64` (and `armv7`) to the targets if a device turns up that needs one.
+4. Add `x86_64` (and `armv7`) to the targets if a device turns up that needs one.
+
+Whatever step 1 finds decides whether steps 2–4 are worth doing: if a
+phone-originated program cannot be pushed to an RTMP ingest, the shell is a
+heavier way to run a web page on a phone and the honest move is to stop
+maintaining the Android target rather than to keep polishing it.
