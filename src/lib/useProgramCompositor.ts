@@ -1,12 +1,5 @@
 import { useEffect, useRef, useState, type RefObject } from 'react'
-import {
-  COMPOSITE_FPS,
-  COMPOSITE_HEIGHT,
-  COMPOSITE_WIDTH,
-  cornerBox,
-  fitInRect,
-  type Rect,
-} from './composite'
+import { COMPOSITE_FPS, COMPOSITE_HEIGHT, COMPOSITE_WIDTH, programSourceLayers } from './composite'
 import { startFrameLoop } from './frameLoop'
 import { drawStroke, type Stroke } from './telestration'
 
@@ -78,24 +71,22 @@ export function useProgramCompositor({
       return
     }
 
-    const frame: Rect = { x: 0, y: 0, width: COMPOSITE_WIDTH, height: COMPOSITE_HEIGHT }
-    const liveBox = cornerBox(COMPOSITE_WIDTH, COMPOSITE_HEIGHT, 'top-right')
-    const camBox = cornerBox(COMPOSITE_WIDTH, COMPOSITE_HEIGHT, 'bottom-right')
-    const camLeftBox = cornerBox(COMPOSITE_WIDTH, COMPOSITE_HEIGHT, 'bottom-left')
-
-    const drawSource = (video: HTMLVideoElement | null, box: Rect) => {
-      if (!video || video.readyState < 2 || video.videoWidth === 0) return
-      const rect = fitInRect(video.videoWidth, video.videoHeight, box)
-      ctx.drawImage(video, rect.x, rect.y, rect.width, rect.height)
-    }
-
     const draw = () => {
       ctx.fillStyle = '#000'
       ctx.fillRect(0, 0, COMPOSITE_WIDTH, COMPOSITE_HEIGHT)
-      drawSource(videoRef.current, frame)
-      if (replayingRef.current) drawSource(liveRef.current, liveBox)
-      drawSource(cornerRef.current, camBox)
-      drawSource(cornerLeftRef.current, camLeftBox)
+      // Which layers go where is decided in `programSourceLayers`, where it can
+      // be tested; this only executes the result.
+      const layers = programSourceLayers({
+        program: videoRef.current,
+        live: liveRef.current,
+        replaying: replayingRef.current,
+        corners: [cornerRef.current, cornerLeftRef.current],
+        frameWidth: COMPOSITE_WIDTH,
+        frameHeight: COMPOSITE_HEIGHT,
+      })
+      for (const layer of layers) {
+        ctx.drawImage(layer.video, layer.rect.x, layer.rect.y, layer.rect.width, layer.rect.height)
+      }
       // Strokes are drawn one by one, not through `renderStrokes`: that helper
       // clears its canvas first, which would wipe the video underneath.
       for (const stroke of strokesRef.current) {

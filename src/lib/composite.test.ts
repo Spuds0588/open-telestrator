@@ -10,6 +10,7 @@ import {
   assignOverlay,
   cornerBox,
   fitInRect,
+  programSourceLayers,
   pruneOverlays,
 } from './composite'
 
@@ -165,6 +166,116 @@ describe('fitInRect', () => {
   it('leaves the box alone for a source with no size yet', () => {
     const box = { x: 1, y: 2, width: 3, height: 4 }
     expect(fitInRect(0, 0, box)).toEqual(box)
+  })
+})
+
+/** A stand-in for a video element that has produced a frame. */
+const frame = (videoWidth = 1920, videoHeight = 1080, readyState = 4) => ({
+  readyState,
+  videoWidth,
+  videoHeight,
+})
+
+/**
+ * The compositor's own picture. It cannot be seen from the DOM — the canvas is
+ * never in the document and only runs for viewers or stream-out — so the layer
+ * order and which boxes get pixels are pinned here instead.
+ */
+describe('programSourceLayers', () => {
+  const frameSize = { frameWidth: COMPOSITE_WIDTH, frameHeight: COMPOSITE_HEIGHT }
+  const program = frame()
+
+  it('draws the program alone, filling the frame, when nothing else is on', () => {
+    const layers = programSourceLayers({
+      program,
+      live: null,
+      replaying: false,
+      corners: [null, null],
+      ...frameSize,
+    })
+    expect(layers).toHaveLength(1)
+    expect(layers[0].rect).toEqual({ x: 0, y: 0, width: COMPOSITE_WIDTH, height: COMPOSITE_HEIGHT })
+  })
+
+  it('shows the live feed in the top-right only while a replay plays', () => {
+    const live = frame(1280, 720)
+    const options = { program, live, replaying: true, corners: [null, null], ...frameSize }
+    const [programLayer, liveLayer] = programSourceLayers(options)
+    expect(liveLayer.rect).toEqual(cornerBox(COMPOSITE_WIDTH, COMPOSITE_HEIGHT, 'top-right'))
+    expect(programLayer.video).toBe(program)
+
+    expect(programSourceLayers({ ...options, replaying: false })).toHaveLength(1)
+  })
+
+  it('carries both cameras at once, the right-hand box drawn first', () => {
+    const camera = frame()
+    const phone = frame(720, 1280)
+    const layers = programSourceLayers({
+      program,
+      live: null,
+      replaying: false,
+      corners: [camera, phone],
+      ...frameSize,
+    })
+    expect(layers).toHaveLength(3)
+    expect(layers[1].video).toBe(camera)
+    expect(layers[2].video).toBe(phone)
+    expect(layers[1].rect).toEqual(cornerBox(COMPOSITE_WIDTH, COMPOSITE_HEIGHT, 'bottom-right'))
+    // The portrait phone is pillarboxed inside the left box, still inside it.
+    const left = cornerBox(COMPOSITE_WIDTH, COMPOSITE_HEIGHT, 'bottom-left')
+    expect(layers[2].rect.x).toBeGreaterThanOrEqual(left.x)
+    expect(layers[2].rect.x + layers[2].rect.width).toBeLessThanOrEqual(left.x + left.width)
+    expect(layers[2].rect.height).toBeCloseTo(left.height)
+  })
+
+  it('leaves an empty box out and keeps the other', () => {
+    const camera = frame()
+    const layers = programSourceLayers({
+      program,
+      live: null,
+      replaying: false,
+      corners: [null, camera],
+      ...frameSize,
+    })
+    expect(layers.map((layer) => layer.video)).toEqual([program, camera])
+  })
+
+  it('skips a source that has not produced a frame yet', () => {
+    const layers = programSourceLayers({
+      program,
+      live: frame(1280, 720, 1),
+      replaying: true,
+      corners: [frame(0, 0), frame(1920, 1080)],
+      ...frameSize,
+    })
+    expect(layers.map((layer) => layer.video.videoWidth)).toEqual([1920, 1920])
+  })
+
+  it('draws nothing before the program has a frame', () => {
+    expect(
+      programSourceLayers({
+        program: null,
+        live: null,
+        replaying: false,
+        corners: [null, null],
+        ...frameSize,
+      }),
+    ).toEqual([])
+  })
+
+  it('never lets a corner box cover the program or the other box', () => {
+    const camera = frame()
+    const phone = frame()
+    const layers = programSourceLayers({
+      program,
+      live: frame(1280, 720),
+      replaying: true,
+      corners: [camera, phone],
+      ...frameSize,
+    })
+    const [programLayer, liveLayer, rightLayer, leftLayer] = layers
+    expect(liveLayer.rect.y).toBeLessThan(programLayer.rect.height)
+    expect(leftLayer.rect.x + leftLayer.rect.width).toBeLessThan(rightLayer.rect.x)
   })
 })
 

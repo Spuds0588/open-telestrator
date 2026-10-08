@@ -138,3 +138,61 @@ export function fitInRect(
     height,
   }
 }
+
+/**
+ * The little of a video element this needs: enough to know whether there is a
+ * frame to draw and at what shape. Narrow so a fake can stand in for a real
+ * element in a test.
+ */
+export interface FrameSource {
+  readyState: number
+  videoWidth: number
+  videoHeight: number
+}
+
+/** One layer of the program picture, in draw order. */
+export interface FrameLayer<T extends FrameSource> {
+  video: T
+  /** Where that video lands on the frame, already letterboxed to its shape. */
+  rect: Rect
+}
+
+/**
+ * What the compositor draws, back to front, for one frame.
+ *
+ * The order is the picture: the program fills the frame, the live feed takes the
+ * top-right only while a replay is playing, and the two corner cameras take the
+ * bottom boxes in `OVERLAY_CORNERS` order. Pulled out of the hook and pure
+ * because the layer order and which boxes actually get pixels is the part a
+ * browser check cannot prove for a canvas that is never in the document.
+ *
+ * A source with no frame yet is skipped rather than drawn black, so a box stays
+ * empty until its feed arrives — and a box with nothing in it is simply absent.
+ */
+export function programSourceLayers<T extends FrameSource>(input: {
+  /** The stage's main video: the live program, or the replay clip. */
+  program: T | null
+  /** The live program, shown top-right while a replay plays. */
+  live: T | null
+  replaying: boolean
+  /** One entry per `OVERLAY_CORNERS`, in that order. `null` is an empty box. */
+  corners: readonly (T | null)[]
+  frameWidth: number
+  frameHeight: number
+}): FrameLayer<T>[] {
+  const { program, live, replaying, corners, frameWidth, frameHeight } = input
+  const layers: FrameLayer<T>[] = []
+
+  const add = (video: T | null, box: Rect) => {
+    if (!video || video.readyState < 2 || video.videoWidth <= 0) return
+    layers.push({ video, rect: fitInRect(video.videoWidth, video.videoHeight, box) })
+  }
+
+  add(program, { x: 0, y: 0, width: frameWidth, height: frameHeight })
+  if (replaying) add(live, cornerBox(frameWidth, frameHeight, 'top-right'))
+  OVERLAY_CORNERS.forEach((corner, index) => {
+    add(corners[index] ?? null, cornerBox(frameWidth, frameHeight, corner))
+  })
+
+  return layers
+}
