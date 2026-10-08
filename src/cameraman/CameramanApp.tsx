@@ -31,7 +31,11 @@ type CameramanStatus =
 const CAMERA_CONSTRAINTS: MediaStreamConstraints = {
   // Rear camera by preference; browsers fall back to whatever is available.
   video: { facingMode: 'environment' },
-  audio: false,
+  // The microphone travels with the picture: a phone on the far side of the
+  // ground is a commentator's camera and voice, and the host mixes whatever
+  // audio the program source carries. A refusal here fails the whole request,
+  // which is the honest answer — say so rather than sending a silent camera.
+  audio: true,
 }
 
 /**
@@ -42,14 +46,18 @@ const CAMERA_CONSTRAINTS: MediaStreamConstraints = {
 const ACCEPT_TIMEOUT_MS = 12000
 
 /**
- * The lightweight co-host page — the cameraman page, and the shared canvas.
+ * The phone page: one session, two doors, decided by the link's role.
  *
- * It connects to the host peer from the magic link. Sharing the phone's camera
- * is optional: with it, a single one-way media call sends only the camera and
- * the host answers with no stream. Either way the host calls back with the
- * program picture and both directions trade drawing operations over the same
- * token-checked data channel, so a second person can telestrate on the host's
- * canvas without ever granting camera access.
+ * A **co-host** link is the light studio: sharing the camera is optional, and
+ * either way the host calls back with the program picture and both directions
+ * trade drawing operations over the same token-checked data channel, so a second
+ * person can telestrate on the host's canvas without ever granting camera access.
+ *
+ * A **camera** link — the one the Add input picker hands out — is a camera and a
+ * microphone and nothing else: no drawing surface, no program picture, no way to
+ * join without a camera. Only the host draws.
+ *
+ * The media call is one-way in both cases: the host answers with no stream.
  */
 export default function CameramanApp() {
   const [session] = useState<CameraSession | null>(() => parseCameraLink(window.location.href))
@@ -57,6 +65,8 @@ export default function CameramanApp() {
   const [notice, setNotice] = useState<string | null>(
     session ? null : 'This camera link is incomplete. Ask the host for a fresh link.',
   )
+  /** Whether this link invites the phone to draw, or only to send picture. */
+  const canDraw = session !== null && session.role !== 'camera'
   const [preview, setPreview] = useState<MediaStream | null>(null)
   /** How many people are watching, as last reported by the host. */
   const [viewers, setViewers] = useState<number | null>(null)
@@ -110,8 +120,8 @@ export default function CameramanApp() {
 
   // The drawing surface only exists while the host is offering the program.
   useEffect(() => {
-    if (!program) setDrawing(false)
-  }, [program])
+    if (!program || !canDraw) setDrawing(false)
+  }, [program, canDraw])
 
   // Bind the local preview once the camera is open.
   useEffect(() => {
@@ -143,31 +153,35 @@ export default function CameramanApp() {
 
   const commitStroke = useCallback(
     (stroke: Stroke) => {
+      if (!canDraw) return
       setStrokes((prev) => applyCollabOp(prev, drawOp(stroke)))
       sendOp(drawOp(stroke))
     },
-    [sendOp],
+    [canDraw, sendOp],
   )
 
   const handleUndo = useCallback(() => {
-    if (strokes.length === 0) return
+    if (!canDraw || strokes.length === 0) return
     const last = strokes[strokes.length - 1]
     setStrokes(strokes.slice(0, -1))
     sendOp({ t: 'remove', id: last.id })
-  }, [strokes, sendOp])
+  }, [canDraw, strokes, sendOp])
 
   const handleClear = useCallback(() => {
+    if (!canDraw) return
     setStrokes([])
     sendOp({ t: 'clear' })
-  }, [sendOp])
+  }, [canDraw, sendOp])
 
   /**
    * Join the host. With a camera the media call leads and the channel follows;
    * without one the channel alone makes the connection, so a co-host who is
-   * only there to draw never has to grant camera permission.
+   * only there to draw never has to grant camera permission. A camera link has
+   * no camera-less path: the picture is the whole point of it.
    */
   const connect = useCallback(async (wantCamera: boolean) => {
     if (!session || joiningRef.current || peerRef.current) return
+    if (!canDraw && !wantCamera) return
     joiningRef.current = true
     setNotice(null)
 
@@ -196,10 +210,10 @@ export default function CameramanApp() {
     peerRef.current = peer
 
     // The host calls back with the program picture. Only the host we dialled may
-    // do so; answering sends no media the other way — the camera path stays
-    // one-way.
+    // do so, and only a co-host link hears it at all: a camera link is offered
+    // nothing to draw on, so a program call to one is refused outright.
     peer.on('call', (call) => {
-      if (call.peer !== session.hostId) {
+      if (!canDraw || call.peer !== session.hostId) {
         call.close()
         return
       }
@@ -226,16 +240,18 @@ export default function CameramanApp() {
       // One-way: we send our camera and expect no stream back. The token rides
       // in the call metadata; the host closes the call if it doesn't match.
       const call = media
-        ? peer.call(session.hostId, media, { metadata: { token: session.token } })
+        ? peer.call(session.hostId, media, { metadata: { token: session.token, role: session.role } })
         : null
       callRef.current = call
 
       // The data channel carries the viewer count down and drawing operations
       // both ways: the host repeats the count so we can show how many people are
       // watching, and echoes the shared strokes so both canvases agree.
+      // The role rides along so the host can tell a camera from a co-host: a
+      // camera is never sent the program picture or the stroke stack.
       const channel = peer.connect(session.hostId, {
         reliable: true,
-        metadata: { token: session.token },
+        metadata: { token: session.token, role: session.role },
       })
       channelRef.current = channel
       let opened = false
@@ -306,7 +322,7 @@ export default function CameramanApp() {
       timerRef.current = window.setInterval(watch, 300)
       watch()
     })
-  }, [session])
+  }, [canDraw, session])
 
   const retry = useCallback(() => {
     teardown()
@@ -349,7 +365,7 @@ export default function CameramanApp() {
       <header className="camera__topbar">
         <div className="brand">
           <span className="brand__dot" aria-hidden="true" />
-          <h1>Co-host</h1>
+          <h1>{canDraw ? 'Co-host' : 'Camera'}</h1>
         </div>
         {viewers !== null && (
           <span className="camera__viewers" data-testid="camera-viewers">
@@ -360,7 +376,7 @@ export default function CameramanApp() {
       </header>
 
       <main className="camera__main">
-        {drawing && program ? (
+        {canDraw && drawing && program ? (
           /* The shared canvas: the program picture with the co-host's strokes. */
           <div className="camera__draw" data-testid="camera-draw">
             <div className="camera__draw-tools">
@@ -453,9 +469,9 @@ export default function CameramanApp() {
               {status === 'requesting' && 'Waiting for camera permission…'}
               {status === 'connecting' && 'Connecting to the host…'}
               {status === 'live' &&
-            (preview
-              ? 'Live — your camera is streaming to the host.'
-              : 'Connected — you can draw on the program.')}
+                (preview
+                  ? 'Live — your camera and microphone are streaming to the host.'
+                  : 'Connected — you can draw on the program.')}
               {status === 'denied' && 'Camera permission was blocked.'}
               {status === 'rejected' && 'The host did not accept this camera.'}
               {status === 'error' && 'Something went wrong.'}
@@ -510,7 +526,7 @@ export default function CameramanApp() {
             )}
 
             {/* Co-host controls: only once the host offers the program picture. */}
-            {status === 'live' && program && (
+            {canDraw && status === 'live' && program && (
               <button
                 type="button"
                 className="btn"
@@ -533,7 +549,7 @@ export default function CameramanApp() {
                 >
                   {status === 'ready' ? 'Start camera' : 'Try again'}
                 </button>
-                {status === 'ready' && (
+                {canDraw && status === 'ready' && (
                   <button
                     type="button"
                     className="btn btn--ghost"

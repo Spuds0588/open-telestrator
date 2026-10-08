@@ -12,6 +12,20 @@
 export const CAMERA_PARAM = 'camera'
 
 /**
+ * Query parameter saying what the phone is being invited to be.
+ *
+ * One session, one token, two doors: the studio's **Co-hosts** group hands out a
+ * co-host link (draw on the program, and share a camera and a mic if you want),
+ * and the **Add input** picker hands out a camera link, which is a camera and a
+ * microphone and nothing else. The role says which door the person came through;
+ * it is an intention rather than a permission, because the token is what the host
+ * actually checks, and the phone page is the only thing that reads it.
+ */
+export const ROLE_PARAM = 'role'
+
+export type CameraRole = 'cohost' | 'camera'
+
+/**
  * How often the host repeats the viewer count to its co-hosts. The media path
  * stays one-way — a cameraman never receives the program — so this number
  * travels on its own small data channel, and it is repeated rather than sent
@@ -25,6 +39,8 @@ export interface CameraSession {
   hostId: string
   /** Per-session secret the host verifies before answering. */
   token: string
+  /** What the link invites this phone to be. A link that says nothing is a co-host. */
+  role: CameraRole
 }
 
 /** What the host tells a co-host over the camera link's data channel. */
@@ -62,10 +78,17 @@ export function createToken(): string {
  * root; resolving it against the host URL keeps the link inside the app when the
  * front end is served from a sub-path, e.g. GitHub Pages /open-telestrator/.
  */
-export function buildCameraLink(baseHref: string, session: CameraSession): string {
+export function buildCameraLink(
+  baseHref: string,
+  /** The role is optional on purpose: building a co-host link needs no ceremony. */
+  session: Omit<CameraSession, 'role'> & { role?: CameraRole },
+): string {
   const url = new URL('app.html', baseHref)
   url.searchParams.set(CAMERA_PARAM, session.hostId)
   url.searchParams.set('t', session.token)
+  // The co-host role is the default, and stays unspoken: a link without the
+  // parameter is a co-host link, including every link minted before this.
+  if (session.role === 'camera') url.searchParams.set(ROLE_PARAM, 'camera')
   return url.toString()
 }
 
@@ -80,5 +103,10 @@ export function parseCameraLink(href: string): CameraSession | null {
   const hostId = url.searchParams.get(CAMERA_PARAM)
   const token = url.searchParams.get('t')
   if (!hostId || !token) return null
-  return { hostId, token }
+  return { hostId, token, role: parseRole(url.searchParams.get(ROLE_PARAM)) }
+}
+
+/** Anything that is not an explicit camera link is a co-host link. */
+export function parseRole(value: string | null): CameraRole {
+  return value === 'camera' ? 'camera' : 'cohost'
 }

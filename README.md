@@ -26,8 +26,9 @@ sources: a **＋ Add input** button opens a picker to share a tab, open any of t
 host's own cameras (an array of USB cameras shows up as several feeds), drop in a
 video file or paste an HLS/MP4 URL; the list below it puts an input on the
 program with one click and stops it from the same row; the picker also carries
-**Add a phone camera**, which mints the same session link the **Co-hosts** panel
-does — a second phone can send its camera, draw on the program, or both. The
+**Add a phone camera**, which hands out the **Co-hosts** panel's session as a
+camera only — the phone sends its camera and microphone and is offered no drawing
+surface, because drawing belongs to the host. The
 transport for an opened file sits under the list, and the panel ends with the
 **corner camera** —
 the picture-in-picture that sits bottom-right on air. Alongside it: the **Audio**
@@ -49,13 +50,13 @@ reported to any connected co-host, who can also draw on the same canvas (see
 
 ## Cameraman magic link
 
-On the host, **Co-hosts → Invite a co-host** mints a session link — and so does
-**Add input → Add a phone camera**, because the same link is both the cameraman's
-and the co-host's and a host looks for a second camera under inputs. Opening it
-on a phone loads a tiny view (code-split, so it never downloads the host stage)
-that can share the camera and draw on the program — the camera is optional, so a
-co-host who is only there to telestrate never has to grant it. Every connected
-co-host is listed on the host, with a button to drop it.
+On the host, **Co-hosts → Invite a co-host** mints a session link, and
+**Add input → Add a phone camera** hands out the same session through its other
+door. One link, two roles: a co-host can draw on the program and may share a
+camera and a microphone, while a phone camera sends its camera and microphone and
+is offered no drawing surface at all — only the host draws. Opening either link on
+a phone loads a tiny view (code-split, so it never downloads the host stage).
+Every connected phone is listed on the host, with a button to drop it.
 The camera path is strictly **one-way**: the host answers the camera call with no
 return stream, and the link's per-session token is checked first — a call whose
 token does not match is closed without an answer. Accepted camera feeds appear in

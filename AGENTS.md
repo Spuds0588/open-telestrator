@@ -122,13 +122,18 @@ code a phone gets.
   source controls. Rail tiles and the co-host's drawing tools are sized for a
   stylus and a fingertip — keep new controls at least 40px on their short side
   rather than shrinking them to fit.
-- **The phone link has one session and two doors.** The cameraman link and the
-  co-host link are the same link, minted once (`useHostCamera.createLink`) and
-  shown once (`QrModal`). The **Co-hosts** panel is one way in and the **Add
-  input** picker is the other — a host looks for a second camera under inputs, so
-  `AddInputModal` carries a phone-camera row (`add-input-phone-camera`) that mints
-  or re-shows the very same session rather than a second one. Never fork a second
-  link or a second dialog for it.
+- **The phone link has one session and two doors, and the door is the role.**
+  The cameraman link and the co-host link are the same link — one peer, one token,
+  minted once (`useHostCamera.createLink`) — and the only difference is the `role`
+  parameter on the URL handed out (`src/lib/cameraLink.ts`). The **Co-hosts** panel
+  hands out the co-host link: draw on the program, camera and mic optional. The
+  **Add input** picker hands out `role=camera` (`add-input-phone-camera`): a camera
+  and a microphone and nothing else, because a host looks for a second camera under
+  inputs. **Only the host draws**, so a camera link is never sent the program or the
+  stroke stack, and the phone page refuses a program call outright. The role is an
+  intention, not a permission — the token is what the host checks — and a link that
+  says nothing is a co-host link, which is every link minted before the roles
+  existed. Never fork a second peer, token or dialog for it.
 - **Icons are Lucide outlines, never emoji**, mapped per concern in
   `src/components/icons.tsx` and stroked in `currentColor` so the control's own
   colour drives them. Importing a named icon is the only way to reach one: the
@@ -142,7 +147,10 @@ code a phone gets.
   still not drawn: the Add input picker offers its screen/tab row only where
   `getDisplayMedia` exists (`canShareScreen` in `src/lib/capture.ts`), so a phone
   that cannot share its screen never shows a button that can only fail. The rule is
-  the capability, not the device.
+  the capability, not the device. The phone page (`?camera=`) asks for the
+  microphone along with the camera: a phone on the far side of the ground is a
+  commentator's camera and voice, and the host's mixer takes whatever audio the
+  program source carries.
 - **Touch and stylus rules live in `src/lib/touch.ts`, with tests.** Form factor,
   the rail-against-sheet layout, pressure on a stroke and palm rejection are all
   decided there and asked for by the components; the CSS hangs off

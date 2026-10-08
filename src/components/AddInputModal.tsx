@@ -15,10 +15,10 @@ import type { MediaFeeds } from '../lib/useMediaFeeds'
  * the rest.
  *
  * A phone on the other end is one of those inputs, and it is listed here because
- * this is where a host looks for a camera. It mints the very same link the
- * Co-hosts group does — one session, one URL, whether the phone sends a camera,
- * draws on the program, or both — so it is not a second feature with a second
- * dialog, just the other door into the same one.
+ * this is where a host looks for a camera. It opens the same session the Co-hosts
+ * group mints — one peer, one token — through the **camera** door: the phone sends
+ * its camera and microphone and is offered no drawing surface. Drawing is the
+ * host's; a person who is invited to draw comes in through the Co-hosts group.
  */
 export function AddInputModal({
   screenStatus,
@@ -42,7 +42,10 @@ export function AddInputModal({
   cameras: HostCameras
   media: MediaFeeds
   camera: HostCamera
-  /** Mint the phone link, or show the QR again if this session already has one. */
+  /**
+   * Mint this session's camera link, or show its QR again — the camera door of
+   * the one link the Co-hosts group also hands out.
+   */
   onInviteCamera: () => void
   onClose: () => void
 }) {
@@ -96,8 +99,8 @@ export function AddInputModal({
             </button>
           )}
 
-          {/* The link itself lives in the Co-hosts group. The row is here
-              because "who is sending the picture" is an input question. */}
+          {/* A camera, not a co-host: the phone sends a picture and a microphone
+              and nothing comes back its way. */}
           <button
             type="button"
             className={`picker__row ${camera.link ? 'picker__row--on' : ''}`}
@@ -123,7 +126,7 @@ export function AddInputModal({
               <span className="picker__sub">
                 {camera.link
                   ? 'Tap for the QR and the link'
-                  : 'Another phone sends its camera, and can draw on the program'}
+                  : 'Another phone sends its camera and microphone'}
               </span>
             </span>
           </button>

@@ -11,6 +11,7 @@ import type { AudioController } from '../lib/useAudioMixer'
 import type { ReplayController } from '../lib/useReplay'
 import type { BroadcastController } from '../lib/useBroadcast'
 import { useQrCode } from '../lib/useQrCode'
+import type { CameraRole } from '../lib/cameraLink'
 import { ALL_TOOLS, COLORS, COLOR_LABELS, TOOL_LABELS, type Tool } from '../lib/telestration'
 import {
   DEFAULT_PANEL,
@@ -107,17 +108,23 @@ export function Sidebar({
   canBroadcast: boolean
   stream: StreamOutController
 }) {
-  // The QR dialog opens as soon as a cameraman link is minted, and can be
-  // reopened from the panel later.
-  const [showQr, setShowQr] = useState(false)
+  // Which link's QR dialog is open. The session is one, minted once, but it is
+  // handed out through two doors — the Co-hosts panel (draw, camera and mic) and
+  // the Add input picker (camera and mic only) — and each shows its own URL, so
+  // the dialog has to remember which door it was opened from. It opens as soon as
+  // the link is minted and can be reopened from either place later.
+  const [showQr, setShowQr] = useState<CameraRole | null>(null)
   const [showWatchQr, setShowWatchQr] = useState(false)
   const [showAdd, setShowAdd] = useState(false)
   // Which group's panel is open. Clicking the open group's rail tile closes it,
   // leaving the rail — the distraction-free picture while on air.
   const [panel, setPanel] = useState<PanelId | null>(DEFAULT_PANEL)
   const viewerQr = useQrCode(broadcast.link)
+  const cameraQr = useQrCode(camera.cameraLink)
+  // The door the host asked from, remembered while the peer opens.
+  const wantedDoor = useRef<CameraRole>('cohost')
   useEffect(() => {
-    if (camera.link) setShowQr(true)
+    if (camera.link) setShowQr(wantedDoor.current)
   }, [camera.link])
 
   // A co-host arriving opens the Co-hosts panel: someone has just joined the
@@ -172,13 +179,17 @@ export function Sidebar({
       ? 'Connecting…'
       : 'Invite a co-host'
 
-  // One link, two doors: the Co-hosts group and the Add input picker both land
-  // here, so a second phone is one URL whether the host thinks of it as a camera
-  // or as somebody drawing.
-  const inviteCamera = () => {
-    if (camera.link) setShowQr(true)
+  // One session, two doors: the Co-hosts group hands out the link that can draw,
+  // and the Add input picker hands out the same session as a camera and a
+  // microphone. Neither mints a second link; whichever door is used, the peer and
+  // the token are the ones already open.
+  const inviteFrom = (role: CameraRole) => {
+    wantedDoor.current = role
+    if (camera.link) setShowQr(role)
     else camera.createLink()
   }
+
+  const inviteUrl = showQr === 'camera' ? camera.cameraLink : camera.link
 
   const togglePanel = (id: PanelId) => setPanel((current) => (current === id ? null : id))
   const mainPanels = panels.filter((item) => !item.utility)
@@ -411,7 +422,7 @@ export function Sidebar({
                   className="chip chip--wide"
                   data-testid="create-camera-link"
                   disabled={camera.status === 'opening'}
-                  onClick={inviteCamera}
+                  onClick={() => inviteFrom('cohost')}
                 >
                   <QrCode aria-hidden="true" />
                   {inviteLabel}
@@ -683,17 +694,17 @@ export function Sidebar({
           cameras={cameras}
           media={media}
           camera={camera}
-          onInviteCamera={inviteCamera}
+          onInviteCamera={() => inviteFrom('camera')}
           onClose={() => setShowAdd(false)}
         />
       )}
 
-      {showQr && camera.link && (
+      {showQr && inviteUrl && (
         <QrModal
-          title="Co-host invite link"
-          url={camera.link}
-          qr={qr}
-          onClose={() => setShowQr(false)}
+          title={showQr === 'camera' ? 'Phone camera link' : 'Co-host invite link'}
+          url={inviteUrl}
+          qr={showQr === 'camera' ? cameraQr : qr}
+          onClose={() => setShowQr(null)}
         />
       )}
 

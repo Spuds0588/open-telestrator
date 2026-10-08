@@ -1,6 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Peer, { type DataConnection, type MediaConnection } from 'peerjs'
-import { VIEWERS_REPORT_MS, buildCameraLink, createToken, viewersReport } from './cameraLink'
+import {
+  VIEWERS_REPORT_MS,
+  buildCameraLink,
+  createToken,
+  parseRole,
+  viewersReport,
+  type CameraRole,
+} from './cameraLink'
 import { parseCollabOp, syncOp, type CollabOp } from './collab'
 import { peerOptions } from './peerConfig'
 import type { Stroke } from './telestration'
@@ -36,8 +43,14 @@ export interface HostCameraCollab {
 export interface HostCamera {
   status: HostCameraStatus
   notice: string | null
-  /** The magic link to hand to a cameraman, once the peer is open. */
+  /** The co-host magic link, once the peer is open: drawing, camera, mic. */
   link: string | null
+  /**
+   * The camera-only link for the same session: a phone that sends its camera and
+   * microphone and is offered no drawing surface. Same peer, same token — the
+   * difference is the door the person came through.
+   */
+  cameraLink: string | null
   /** Every camera currently streaming in, newest last. */
   sources: CameraSource[]
   /** Every connected co-host, the moment its channel opens. */
@@ -75,6 +88,7 @@ export function useHostCamera(
   const [status, setStatus] = useState<HostCameraStatus>('idle')
   const [notice, setNotice] = useState<string | null>(null)
   const [link, setLink] = useState<string | null>(null)
+  const [cameraLink, setCameraLink] = useState<string | null>(null)
   const [sources, setSources] = useState<CameraSource[]>([])
   const [cohosts, setCohosts] = useState<CoHost[]>([])
 
@@ -83,6 +97,11 @@ export function useHostCamera(
   const callsRef = useRef(new Map<string, MediaConnection>())
   /** Co-hosts listening for the viewer count and swapping drawing operations. */
   const connsRef = useRef(new Map<string, DataConnection>())
+  /**
+   * Which connections came through the camera door. They are handed no program
+   * picture and no stroke stack, because they have nothing to draw on.
+   */
+  const cameraRolesRef = useRef(new Set<string>())
   /** The program call made to each co-host, so it can be replaced or closed. */
   const programCallsRef = useRef(new Map<string, MediaConnection>())
   const viewersRef = useRef(viewers)
@@ -133,12 +152,14 @@ export function useHostCamera(
     })
   }, [])
 
-  /** Rebuild the co-host list from the live channels and camera calls. */
+  /** Rebuild the connected list from the live channels and camera calls. */
   const syncCohosts = useCallback(() => {
     setCohosts(
       [...connsRef.current.keys()].map((id) => ({
         id,
-        label: `Co-host ${id.slice(0, 4)}`,
+        // Named for the door it came through, so a phone that is only a camera
+        // is not mistaken for somebody who can draw.
+        label: `${cameraRolesRef.current.has(id) ? 'Camera' : 'Co-host'} ${id.slice(0, 4)}`,
         streaming: callsRef.current.has(id),
       })),
     )
@@ -189,7 +210,10 @@ export function useHostCamera(
     (stream: MediaStream | null) => {
       if (programRef.current === stream) return
       programRef.current = stream
-      for (const id of [...connsRef.current.keys()]) sendProgram(id, stream)
+      for (const id of [...connsRef.current.keys()]) {
+        if (cameraRolesRef.current.has(id)) continue
+        sendProgram(id, stream)
+      }
     },
     [sendProgram],
   )
@@ -201,12 +225,14 @@ export function useHostCamera(
     programCallsRef.current.clear()
     for (const conn of connsRef.current.values()) conn.close()
     connsRef.current.clear()
+    cameraRolesRef.current.clear()
     peerRef.current?.destroy()
     peerRef.current = null
     tokenRef.current = null
     setSources([])
     setCohosts([])
     setLink(null)
+    setCameraLink(null)
   }, [])
 
   const stop = useCallback(() => {
@@ -224,6 +250,7 @@ export function useHostCamera(
       programCallsRef.current.clear()
       for (const conn of connsRef.current.values()) conn.close()
       connsRef.current.clear()
+      cameraRolesRef.current.clear()
       peerRef.current?.destroy()
       peerRef.current = null
     },
@@ -251,7 +278,10 @@ export function useHostCamera(
     peerRef.current = peer
 
     peer.on('open', (id) => {
-      setLink(buildCameraLink(window.location.href, { hostId: id, token }))
+      // One session, two links: the same peer and the same token, so either door
+      // reaches this host, and the role only decides what the phone is offered.
+      setLink(buildCameraLink(window.location.href, { hostId: id, token, role: 'cohost' }))
+      setCameraLink(buildCameraLink(window.location.href, { hostId: id, token, role: 'camera' }))
       setStatus('ready')
     })
 
@@ -298,6 +328,11 @@ export function useHostCamera(
         return
       }
       connsRef.current.set(conn.peer, conn)
+      const role: CameraRole = parseRole(
+        (conn.metadata as { role?: string } | undefined)?.role ?? null,
+      )
+      if (role === 'camera') cameraRolesRef.current.add(conn.peer)
+      else cameraRolesRef.current.delete(conn.peer)
       syncCohosts()
 
       conn.on('data', (raw) => {
@@ -311,6 +346,7 @@ export function useHostCamera(
 
       conn.on('close', () => {
         if (connsRef.current.get(conn.peer) === conn) connsRef.current.delete(conn.peer)
+        cameraRolesRef.current.delete(conn.peer)
         const programCall = programCallsRef.current.get(conn.peer)
         programCall?.close()
         programCallsRef.current.delete(conn.peer)
@@ -318,9 +354,12 @@ export function useHostCamera(
       })
 
       // Ready: report the current count, start the co-host from the strokes
-      // that are already on air, and offer it the program to draw on.
+      // that are already on air, and offer it the program to draw on. A camera
+      // link is none of that — it is a picture and a microphone — so it is sent
+      // only the count its page can show.
       const ready = () => {
         sendReport(conn)
+        if (role === 'camera') return
         conn.send(syncOp(strokesRef.current))
         sendProgram(conn.peer, programRef.current)
       }
@@ -333,6 +372,7 @@ export function useHostCamera(
     status,
     notice,
     link,
+    cameraLink,
     sources,
     cohosts,
     disconnect,

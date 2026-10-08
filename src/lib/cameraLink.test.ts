@@ -4,6 +4,7 @@ import {
   createToken,
   parseCameraLink,
   parseCameraReport,
+  parseRole,
   viewersReport,
 } from './cameraLink'
 
@@ -24,7 +25,39 @@ describe('buildCameraLink / parseCameraLink', () => {
     expect(url.searchParams.get('camera')).toBe('host-1')
     expect(url.searchParams.get('t')).toBe('abc123')
     expect(url.pathname).toBe('/app.html')
-    expect(parseCameraLink(link)).toEqual({ hostId: 'host-1', token: 'abc123' })
+    expect(parseCameraLink(link)).toEqual({ hostId: 'host-1', token: 'abc123', role: 'cohost' })
+  })
+
+  it('leaves the co-host role unspoken, and spells out only a camera link', () => {
+    // One session, two doors: the role is what differs, and a co-host link is
+    // the one every earlier version minted — no parameter at all.
+    const cohost = buildCameraLink('http://localhost:5173/', {
+      hostId: 'p',
+      token: 'q',
+      role: 'cohost',
+    })
+    expect(new URL(cohost).searchParams.get('role')).toBeNull()
+    expect(parseCameraLink(cohost)?.role).toBe('cohost')
+
+    const camera = buildCameraLink('http://localhost:5173/', {
+      hostId: 'p',
+      token: 'q',
+      role: 'camera',
+    })
+    expect(new URL(camera).searchParams.get('role')).toBe('camera')
+    expect(parseCameraLink(camera)).toEqual({ hostId: 'p', token: 'q', role: 'camera' })
+  })
+
+  it('takes an unknown or absent role for a co-host', () => {
+    // Another door's role must never read as a capability nobody checked: the
+    // token is what the host verifies, and the phone page decides from this.
+    expect(parseRole(null)).toBe('cohost')
+    expect(parseRole('')).toBe('cohost')
+    expect(parseRole('cameraman')).toBe('cohost')
+    expect(parseRole('camera')).toBe('camera')
+    expect(parseCameraLink('https://example.com/app.html?camera=p&t=q&role=wat')?.role).toBe(
+      'cohost',
+    )
   })
 
   it('stays on the studio page inside the app sub-path and replaces a stale session', () => {
@@ -33,7 +66,7 @@ describe('buildCameraLink / parseCameraLink', () => {
       { hostId: 'p', token: 'q' },
     )
     expect(link.startsWith('https://spuds0588.github.io/open-telestrator/app.html?')).toBe(true)
-    expect(parseCameraLink(link)).toEqual({ hostId: 'p', token: 'q' })
+    expect(parseCameraLink(link)).toEqual({ hostId: 'p', token: 'q', role: 'cohost' })
   })
 
   it('rejects URLs that are not camera links or are incomplete', () => {
