@@ -25,8 +25,11 @@ clean picture while broadcasting. The **Input** panel is the one home for
 sources: a **＋ Add input** button opens a picker to share a tab, open any of the
 host's own cameras (an array of USB cameras shows up as several feeds), drop in a
 video file or paste an HLS/MP4 URL; the list below it puts an input on the
-program with one click and stops it from the same row; the transport for an
-opened file sits under the list, and the panel ends with the **corner camera** —
+program with one click and stops it from the same row; the picker also carries
+**Add a phone camera**, which mints the same session link the **Co-hosts** panel
+does — a second phone can send its camera, draw on the program, or both. The
+transport for an opened file sits under the list, and the panel ends with the
+**corner camera** —
 the picture-in-picture that sits bottom-right on air. Alongside it: the **Audio**
 mixer (announcer mic and captured program audio, each with mute, volume and a
 live level meter); **Replay**; **Co-hosts**, which mints the invite link and QR,
@@ -46,7 +49,9 @@ reported to any connected co-host, who can also draw on the same canvas (see
 
 ## Cameraman magic link
 
-On the host, **Co-hosts → Invite a co-host** mints a session link. Opening it
+On the host, **Co-hosts → Invite a co-host** mints a session link — and so does
+**Add input → Add a phone camera**, because the same link is both the cameraman's
+and the co-host's and a host looks for a second camera under inputs. Opening it
 on a phone loads a tiny view (code-split, so it never downloads the host stage)
 that can share the camera and draw on the program — the camera is optional, so a
 co-host who is only there to telestrate never has to grant it. Every connected
@@ -335,8 +340,12 @@ Shortcuts: `1`–`4` tools, `C`/`X` colour, `Z` undo, `Delete` clear, `[`/`]`
 previous/next source, `R` replay (play/pause while replaying), `L` back to live.
 
 Resize the window narrow, or open the same page with device emulation on, to see
-the phone layout: the rail moves to the bottom and the panel becomes a sheet.
-There is no separate phone build to start — it is the same bundle.
+the phone layout: the rail moves below the stage and wraps into rows of
+thumb-sized tiles, and the panel becomes a sheet. There is no separate phone
+build to start — it is the same bundle. A phone held upright is asked once per
+visit to turn sideways: in landscape the whole rail is a single row along the
+bottom and the stage takes the rest of the height, which is the shape the studio
+is laid out for.
 
 ## Hosting
 

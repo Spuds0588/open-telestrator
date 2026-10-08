@@ -7,6 +7,7 @@ import {
   isPalm,
   isStylus,
   layoutFor,
+  shouldSuggestLandscape,
   strokeWidth,
 } from './touch'
 
@@ -153,6 +154,27 @@ describe('the layout for a viewport', () => {
 
   it('keeps a control big enough for a fingertip', () => {
     expect(MIN_TARGET).toBeGreaterThanOrEqual(40)
+  })
+})
+
+describe('leaning towards landscape', () => {
+  it('asks a phone held upright to turn over', () => {
+    expect(shouldSuggestLandscape(layout(UA.androidPhone, 390, 844, true))).toBe(true)
+    expect(shouldSuggestLandscape(layout(UA.iphone, 430, 932, true))).toBe(true)
+  })
+
+  it('says nothing once it is turned', () => {
+    expect(shouldSuggestLandscape(layout(UA.androidPhone, 844, 390, true))).toBe(false)
+    expect(shouldSuggestLandscape(layout(UA.iphone, 932, 430, true))).toBe(false)
+  })
+
+  it('leaves a tablet portrait and a desktop window alone', () => {
+    // A tablet has the width for a stacked rail without losing the stage, and a
+    // window the operator chose is nobody's business.
+    expect(shouldSuggestLandscape(layout(UA.ipad, 820, 1180, true))).toBe(false)
+    expect(shouldSuggestLandscape(layout(UA.linux, 1440, 900, false))).toBe(false)
+    // Even a mouse-driven window that is taller than it is wide.
+    expect(shouldSuggestLandscape(layout(UA.linux, 700, 1000, false))).toBe(false)
   })
 })
 

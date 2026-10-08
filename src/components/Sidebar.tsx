@@ -172,6 +172,14 @@ export function Sidebar({
       ? 'Connecting…'
       : 'Invite a co-host'
 
+  // One link, two doors: the Co-hosts group and the Add input picker both land
+  // here, so a second phone is one URL whether the host thinks of it as a camera
+  // or as somebody drawing.
+  const inviteCamera = () => {
+    if (camera.link) setShowQr(true)
+    else camera.createLink()
+  }
+
   const togglePanel = (id: PanelId) => setPanel((current) => (current === id ? null : id))
   const mainPanels = panels.filter((item) => !item.utility)
   const utilityPanels = panels.filter((item) => item.utility)
@@ -403,7 +411,7 @@ export function Sidebar({
                   className="chip chip--wide"
                   data-testid="create-camera-link"
                   disabled={camera.status === 'opening'}
-                  onClick={camera.link ? () => setShowQr(true) : camera.createLink}
+                  onClick={inviteCamera}
                 >
                   <QrCode aria-hidden="true" />
                   {inviteLabel}
@@ -674,6 +682,8 @@ export function Sidebar({
           onToggleScreen={onToggleScreen}
           cameras={cameras}
           media={media}
+          camera={camera}
+          onInviteCamera={inviteCamera}
           onClose={() => setShowAdd(false)}
         />
       )}

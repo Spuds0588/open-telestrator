@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
-import { Camera, FileVideo, Link2, MonitorUp } from 'lucide-react'
+import { Camera, FileVideo, Link2, MonitorUp, Smartphone } from 'lucide-react'
 import type { CaptureStatus } from '../lib/capture'
 import type { HostCameras } from '../lib/useHostCameras'
+import type { HostCamera } from '../lib/useHostCamera'
 import type { MediaFeeds } from '../lib/useMediaFeeds'
 
 /**
@@ -12,6 +13,12 @@ import type { MediaFeeds } from '../lib/useMediaFeeds'
  * appears in the list behind it. Each pick performs the action and closes, so
  * the modal is a single step — the browser's own tab picker or file dialog does
  * the rest.
+ *
+ * A phone on the other end is one of those inputs, and it is listed here because
+ * this is where a host looks for a camera. It mints the very same link the
+ * Co-hosts group does — one session, one URL, whether the phone sends a camera,
+ * draws on the program, or both — so it is not a second feature with a second
+ * dialog, just the other door into the same one.
  */
 export function AddInputModal({
   screenStatus,
@@ -19,6 +26,8 @@ export function AddInputModal({
   onToggleScreen,
   cameras,
   media,
+  camera,
+  onInviteCamera,
   onClose,
 }: {
   screenStatus: CaptureStatus
@@ -32,6 +41,9 @@ export function AddInputModal({
   onToggleScreen: () => void
   cameras: HostCameras
   media: MediaFeeds
+  camera: HostCamera
+  /** Mint the phone link, or show the QR again if this session already has one. */
+  onInviteCamera: () => void
   onClose: () => void
 }) {
   const [url, setUrl] = useState('')
@@ -83,6 +95,38 @@ export function AddInputModal({
               </span>
             </button>
           )}
+
+          {/* The link itself lives in the Co-hosts group. The row is here
+              because "who is sending the picture" is an input question. */}
+          <button
+            type="button"
+            className={`picker__row ${camera.link ? 'picker__row--on' : ''}`}
+            data-testid="add-input-phone-camera"
+            aria-busy={camera.status === 'opening'}
+            disabled={camera.status === 'opening'}
+            onClick={() => {
+              onInviteCamera()
+              onClose()
+            }}
+          >
+            <span className="picker__icon" aria-hidden="true">
+              <Smartphone />
+            </span>
+            <span className="picker__text">
+              <strong>
+                {camera.status === 'opening'
+                  ? 'Opening…'
+                  : camera.link
+                    ? 'Phone camera — link ready'
+                    : 'Add a phone camera'}
+              </strong>
+              <span className="picker__sub">
+                {camera.link
+                  ? 'Tap for the QR and the link'
+                  : 'Another phone sends its camera, and can draw on the program'}
+              </span>
+            </span>
+          </button>
 
           {cameras.devices.length === 0 ? (
             <span className="picker__empty" data-testid="add-input-no-cameras">

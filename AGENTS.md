@@ -122,6 +122,13 @@ code a phone gets.
   source controls. Rail tiles and the co-host's drawing tools are sized for a
   stylus and a fingertip — keep new controls at least 40px on their short side
   rather than shrinking them to fit.
+- **The phone link has one session and two doors.** The cameraman link and the
+  co-host link are the same link, minted once (`useHostCamera.createLink`) and
+  shown once (`QrModal`). The **Co-hosts** panel is one way in and the **Add
+  input** picker is the other — a host looks for a second camera under inputs, so
+  `AddInputModal` carries a phone-camera row (`add-input-phone-camera`) that mints
+  or re-shows the very same session rather than a second one. Never fork a second
+  link or a second dialog for it.
 - **Icons are Lucide outlines, never emoji**, mapped per concern in
   `src/components/icons.tsx` and stroked in `currentColor` so the control's own
   colour drives them. Importing a named icon is the only way to reach one: the
@@ -144,6 +151,20 @@ code a phone gets.
   agent that says nothing is taken for a desktop, so a narrow mouse-driven window
   keeps its side rail. New controls aim for `MIN_TARGET` (44px) on the short side —
   the floor of 40 is the worst case, not the target.
+- **A held device's rail is a wrapped grid, not a bar.** Seven tiles across a
+  390px phone is 49px each, which is a target thumbs miss, so
+  `body[data-layout='compact'] .rail` is a grid of `minmax(88px, 1fr)` columns
+  that wraps — four across a portrait phone, and in landscape exactly seven in one
+  row, because a phone on its side has the width and not the height. Tiles are
+  taller there (`.rail__item` min-height 68) and the glyph and label are sized for
+  a fingertip in `body.touch`. Do not put the zero-width-scrollbar bar back: a
+  hidden scroll region is how the Co-hosts tile went missing on a phone.
+- **Landscape is the shape asked for, once.** `shouldSuggestLandscape` (in
+  `src/lib/touch.ts`, with tests) says a phone held upright is worth interrupting;
+  `src/components/OrientationPrompt.tsx` is the full-screen note it drives, and
+  the session-scoped dismissal is the operator's answer. A tablet in portrait and
+  any window are left alone. Keep the decision in the lib: the component only
+  reads `body` and storage.
 - **Stream-out is WHIP, and it is all in `src/lib/whip.ts`.** The program leaves as
   one `POST` of an SDP offer (`Content-Type: application/sdp`) to a service that
   accepts WebRTC and forwards; the answer comes back in the body with a `Location`

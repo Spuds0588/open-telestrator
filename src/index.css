@@ -1701,100 +1701,189 @@ body.touch .panel {
   touch-action: manipulation;
 }
 
+/* A finger reads a control by its glyph, so the ones held in a hand are drawn
+   larger, and the label under them is big enough to read without leaning in. */
+body.touch .rail__icon {
+  width: 30px;
+  height: 30px;
+}
+
+body.touch .rail__label {
+  font-size: 11px;
+}
+
 /* The rail moves under the stage when the side rail would cost more than it
-   earns — a phone either way up, a tablet in portrait. The panel becomes a
-   sheet above it rather than a column beside it. */
+   earns — a phone either way up, a tablet in portrait. Upright the stage, the
+   sheet and the rail are three stacked rows; turned over, the sheet moves beside
+   the stage and the rail keeps the full width along the bottom. The stage is a
+   grid rather than a flex column for exactly that reason: one layout cannot
+   place a row of panels both under and beside the same stage. */
 body[data-layout='compact'] .stage {
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) auto auto;
+  grid-template-areas:
+    'screen'
+    'panel'
+    'rail';
   gap: 10px;
   padding: 8px;
   padding-bottom: calc(8px + env(safe-area-inset-bottom));
 }
 
+/* The sidebar stops being a column of its own: the panel and the rail become
+   rows of the stage's grid, which is what lets the panel move to the side
+   without taking the rail with it. Only its `complementary` landmark goes with
+   the box; the `<nav>` and the panel keep their own names. */
 body[data-layout='compact'] .sidebar {
-  flex-direction: column;
-  gap: 10px;
-  padding-left: 0;
-  /* Its height comes from the sheet and the bar inside it, never from the
-     stage: the stage is what the operator is drawing on. A phone on its side
-     has 320px to find room in, so the sheet gives way before the bar does. */
-  flex: 0 0 auto;
-  max-height: 62%;
+  display: contents;
 }
 
 body[data-layout='compact'] .screen {
-  flex: 1 1 auto;
+  grid-area: screen;
   min-height: 0;
 }
 
+/* The rail stacks into a grid rather than running as one bar. Seven tiles across
+   a 390px phone is 49px each — a target narrow enough to miss and a label too
+   narrow to hold — so the tiles wrap: four across a portrait phone, two rows of
+   them, every tile 88px wide or more. `auto-fit` decides the count from the
+   width, so this one rule is also the landscape answer (a phone on its side fits
+   all seven in one row, and a tablet fits them without wrapping at all) and a
+   wider phone simply gets more tiles per row. 88px is the floor a fingertip is
+   comfortable with, well past `MIN_TARGET`; the short side of a tile ends up
+   nearer 90. */
 body[data-layout='compact'] .rail {
-  flex: 0 0 auto;
-  flex-direction: row;
-  align-items: stretch;
+  grid-area: rail;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(88px, 1fr));
+  gap: 6px;
+  align-self: stretch;
   width: auto;
-  overflow-x: auto;
-  overflow-y: hidden;
   padding: 2px;
-  /* A bar, not a scroll region: the tiles fit a phone, and where they do not
-     they are still flicked sideways rather than shown a scrollbar nobody can
-     reach. */
-  scrollbar-width: none;
 }
 
-body[data-layout='compact'] .rail::-webkit-scrollbar {
-  display: none;
-}
-
+/* The two clusters in the column dissolve into that one grid: the roster order
+   is what the tiles are read in, and the divider has nothing left to divide. */
 body[data-layout='compact'] .rail__main,
 body[data-layout='compact'] .rail__util {
-  flex-direction: row;
-  align-items: stretch;
-  /* Tighter than the column the tiles were laid out for: the gaps are spent
-     out of the width the tiles need on the narrowest phone. */
-  gap: 2px;
-}
-
-/* The tile shrinks to 44 — `MIN_TARGET`, the size a fingertip needs — before the
-   bar is allowed to overflow, which is what lets seven of them fit a phone. */
-body[data-layout='compact'] .rail__item {
-  flex: 1 1 0;
-  min-width: 44px;
-  min-height: 56px;
-  max-height: none;
-  padding: 6px 2px;
-}
-
-/* A tile this narrow cannot hold "Broadcast"; the icon and the badge are what
-   the bar is read by, and the full name is in the panel once it is open. */
-body[data-layout='compact'] .rail__label {
-  font-size: 10px;
-}
-
-/* The main tiles take the width; the utilities hug their own tiles, so the bar
-   does not end with one tile stretched twice as wide as the rest. */
-body[data-layout='compact'] .rail__main {
-  flex: 1 1 auto;
-}
-
-body[data-layout='compact'] .rail__util {
-  flex: 0 0 auto;
+  display: contents;
 }
 
 body[data-layout='compact'] .rail__split {
-  width: 1px;
-  height: auto;
-  align-self: stretch;
+  display: none;
 }
 
-/* A sheet over the stage rather than a column beside it, and measured against
-   the window rather than its own parent: a percentage of an auto-height parent
-   is circular, and it resolved to a sidebar taller than the stage. */
+/* Taller than the bar's 56, because there is room for it once the tiles are in
+   rows and the whole point is a target a thumb lands on. */
+body[data-layout='compact'] .rail__item {
+  min-height: 68px;
+  max-height: none;
+  padding: 8px 6px;
+}
+
+/* The sheet over the stage: capped against the window rather than its own
+   parent, because a percentage of an auto-sized row is circular. What it may
+   take is what the operator is not drawing on — the stage is the first row and
+   it keeps the rest. */
 body[data-layout='compact'] .panel {
+  grid-area: panel;
   width: auto;
   max-height: 46vh;
   align-self: stretch;
-  /* The one part that gives way when the bar and the sheet together are taller
-     than the space a phone on its side has left for them. */
-  flex: 0 1 auto;
   min-height: 88px;
+}
+
+/* Turned on its side the phone has the width and not the height, and this is the
+   shape the studio is built for: all seven tiles in one row along the bottom
+   whatever the width, so the rail never spends a second row out of the stage,
+   and the panel goes beside the stage rather than under it. The stage keeps
+   about 288px of height on a 390-tall phone instead of the 132 the stacked sheet
+   left it. The second column exists only while a panel is open, so closing the
+   panel hands the width back to the picture. Last in the section on purpose: it
+   overrides the two compact rules above it. */
+@media (orientation: landscape) {
+  body[data-layout='compact'] .rail {
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+  }
+
+  body[data-layout='compact'] .stage:has(.panel) {
+    grid-template-columns: minmax(0, 1fr) 280px;
+    grid-template-areas:
+      'screen panel'
+      'rail rail';
+  }
+
+  body[data-layout='compact'] .panel {
+    /* Beside the stage it is a full-height column, not a sheet with a ceiling:
+       the height it may take is the row it was given. */
+    max-height: 100%;
+    min-height: 0;
+  }
+}
+
+/* ── Turning the phone over ───────────────────────────────────
+   Shown by `OrientationPrompt` on a phone held upright, and by nothing else:
+   the studio is laid out for a landscape window, and this is the one time the
+   shape of the screen is mentioned. It covers the studio on purpose — the point
+   is to be answered before the operator starts drawing — and the button is the
+   way out of it, remembered for the session. */
+.nudge {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(7, 11, 16, 0.94);
+}
+
+.nudge__panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  max-width: 380px;
+  text-align: center;
+}
+
+/* The glyph does the asking: it turns a quarter and comes back. */
+.nudge__icon {
+  width: 72px;
+  height: 72px;
+  color: var(--accent);
+  animation: nudge-turn 2.8s ease-in-out infinite;
+}
+
+.nudge__title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.nudge__text {
+  margin: 0;
+  color: var(--muted);
+}
+
+@keyframes nudge-turn {
+  0%,
+  15% {
+    transform: rotate(0deg);
+  }
+  45%,
+  70% {
+    transform: rotate(-90deg);
+  }
+  100% {
+    transform: rotate(0deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nudge__icon {
+    animation: none;
+    transform: rotate(-90deg);
+  }
 }

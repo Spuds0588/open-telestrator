@@ -25,6 +25,7 @@ import { useStreamOut } from './lib/useStreamOut'
 import { useLayout } from './lib/useLayout'
 import { Sidebar } from './components/Sidebar'
 import { VideoStage } from './components/VideoStage'
+import { OrientationPrompt } from './components/OrientationPrompt'
 
 /** Narrow, stable colour handles so the document keydown handler can hand a
  * value to the React `setColor` dispatch without fighting the literal union.
@@ -61,7 +62,9 @@ export default function App() {
   // The layout this viewport should be drawn in — a phone's rail along the
   // bottom with fingertip-sized controls, a desktop's rail down the side — is
   // worked out from the viewport and the pointer and hung on <body> for the CSS.
-  useLayout()
+  // The answer is kept here as well because one thing reads it in JS: a phone
+  // held upright is asked to turn over.
+  const layout = useLayout()
   // Whether the program should be composited for stream-out. Kept separate from
   // the stream's own state because the compositor has to be running *before* the
   // publisher connects, or the first seconds of the stream are a blank canvas.
@@ -398,6 +401,8 @@ export default function App() {
         </main>
       </div>
 
+      {/* Over everything, and only on a phone held upright. */}
+      <OrientationPrompt layout={layout} />
     </>
   )
 }

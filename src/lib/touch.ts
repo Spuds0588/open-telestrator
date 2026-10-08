@@ -125,6 +125,30 @@ export function layoutFor(input: {
   }
 }
 
+// --- landscape -------------------------------------------------------------
+
+/**
+ * Where the "turn it sideways" note is remembered for the session. Session
+ * scope, not local: the prompt is worth making once per visit, and asking again
+ * every time the studio is opened would be nagging. It is read and written by
+ * the component, because a storage that can throw is not a rule to unit-test.
+ */
+export const LANDSCAPE_NUDGE_KEY = 'ot.landscape-nudge'
+
+/**
+ * Whether this layout is the one worth interrupting for.
+ *
+ * A phone held upright is the case, and only the case: the studio is laid out
+ * for a landscape window, so a portrait phone has the rail stacked into rows and
+ * a stage that is 40% of the screen, while turned on its side the same phone has
+ * one row of controls and a stage that fills the height. A tablet in portrait is
+ * not interrupted — it has the width for the grid without losing the stage — and
+ * a desktop window is nobody's business.
+ */
+export function shouldSuggestLandscape(layout: Layout): boolean {
+  return layout.form === 'phone' && layout.orientation === 'portrait'
+}
+
 // --- stylus ----------------------------------------------------------------
 
 /** Whether a pointer came from a pen rather than a finger or a mouse. */
