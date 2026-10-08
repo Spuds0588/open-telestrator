@@ -9,6 +9,13 @@ import { COHOST_CAMERA_PREFIX, mergeStageSources } from './lib/sources'
 import { useBroadcast } from './lib/useBroadcast'
 import { mixBroadcastStream } from './lib/broadcast'
 import { useProgramCompositor } from './lib/useProgramCompositor'
+import {
+  NO_OVERLAYS,
+  assignOverlay,
+  pruneOverlays,
+  type OverlayCorner,
+  type OverlaySources,
+} from './lib/composite'
 import { useQrCode } from './lib/useQrCode'
 import { useHardware } from './lib/useHardware'
 import type { HardwareAction } from './lib/hardware'
@@ -110,13 +117,21 @@ export default function App() {
   // audio from the element itself, since its capture is video-only.
   const selectedElement = media.feeds.find((feed) => feed.id === selectedId)?.element ?? null
 
-  // The commentator's corner camera: any source, in the bottom-right of the
-  // program. It is dropped when it disappears or becomes the program itself.
-  const [cornerId, setCornerId] = useState<string | null>(null)
-  const corner = cornerId ? sources.find((source) => source.id === cornerId) ?? null : null
+  // The corner cameras: two picture-in-picture boxes, one per bottom corner, so
+  // a host's own camera and a phone's can be held on air together. A box is
+  // dropped when its source disappears or becomes the program itself, which is
+  // why the rule lives in the lib rather than in this effect.
+  const [overlays, setOverlays] = useState<OverlaySources>(NO_OVERLAYS)
   useEffect(() => {
-    if (cornerId && (!corner || cornerId === selectedId)) setCornerId(null)
-  }, [cornerId, corner, selectedId])
+    setOverlays((current) => pruneOverlays(current, sources, selectedId))
+  }, [sources, selectedId])
+
+  const corner = sources.find((source) => source.id === overlays['bottom-right']) ?? null
+  const cornerLeft = sources.find((source) => source.id === overlays['bottom-left']) ?? null
+
+  const handleOverlayChange = useCallback((corner: OverlayCorner, id: string | null) => {
+    setOverlays((current) => assignOverlay(current, corner, id))
+  }, [])
 
   // Audio and replay are owned here so their controls can live in the sidebar.
   const audio = useAudioMixer(selected?.stream ?? null, selectedElement)
@@ -127,6 +142,7 @@ export default function App() {
   // strokes — into one stream while viewers are being fed.
   const liveRef = useRef<HTMLVideoElement>(null)
   const cornerRef = useRef<HTMLVideoElement>(null)
+  const cornerLeftRef = useRef<HTMLVideoElement>(null)
   const composited = useProgramCompositor({
     // Viewers are fed from the composite, and so is stream-out; either one is a
     // reason to be drawing it.
@@ -134,6 +150,7 @@ export default function App() {
     videoRef,
     liveRef,
     cornerRef,
+    cornerLeftRef,
     strokes: past,
     replaying: replay.replaying,
   })
@@ -360,6 +377,8 @@ export default function App() {
             liveRef={liveRef}
             cornerStream={corner?.stream ?? null}
             cornerRef={cornerRef}
+            cornerLeftStream={cornerLeft?.stream ?? null}
+            cornerLeftRef={cornerLeftRef}
             clip={replay.clip}
             replaying={replay.replaying}
             past={past}
@@ -389,8 +408,8 @@ export default function App() {
             sources={sources}
             selectedId={selectedId}
             onSelect={setSelectedId}
-            cornerId={cornerId}
-            onCornerChange={setCornerId}
+            overlays={overlays}
+            onOverlayChange={handleOverlayChange}
             hardware={hardware}
             audio={audio}
             replay={replay}

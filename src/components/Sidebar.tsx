@@ -7,6 +7,7 @@ import type { MediaFeeds } from '../lib/useMediaFeeds'
 import type { HardwareController } from '../lib/useHardware'
 import { HARDWARE_HINT } from '../lib/hardware'
 import { sourceRemoval, type StageSource } from '../lib/sources'
+import { OVERLAY_CORNERS, type OverlayCorner, type OverlaySources } from '../lib/composite'
 import type { AudioController } from '../lib/useAudioMixer'
 import type { ReplayController } from '../lib/useReplay'
 import type { BroadcastController } from '../lib/useBroadcast'
@@ -40,6 +41,16 @@ import { QrModal } from './QrModal'
 import { AddInputModal } from './AddInputModal'
 
 /**
+ * The two corner boxes as the Input panel names them, in the order they are
+ * listed: the right-hand box first, which is where a single corner camera has
+ * always gone, then the second box on the left.
+ */
+const OVERLAY_LABELS: Record<OverlayCorner, string> = {
+  'bottom-right': 'Corner camera',
+  'bottom-left': 'Second corner',
+}
+
+/**
  * The controls, on the right of the stage: a rail of every group and one panel
  * in front of it.
  *
@@ -71,8 +82,8 @@ export function Sidebar({
   sources,
   selectedId,
   onSelect,
-  cornerId,
-  onCornerChange,
+  overlays,
+  onOverlayChange,
   hardware,
   audio,
   replay,
@@ -99,8 +110,9 @@ export function Sidebar({
   sources: StageSource[]
   selectedId: string | null
   onSelect: (id: string) => void
-  cornerId: string | null
-  onCornerChange: (id: string | null) => void
+  /** Which source each corner box is showing (see `OverlaySources`). */
+  overlays: OverlaySources
+  onOverlayChange: (corner: OverlayCorner, id: string | null) => void
   hardware: HardwareController
   audio: AudioController
   replay: ReplayController
@@ -375,33 +387,36 @@ export function Sidebar({
                 <span className="side-hint">Tap an input to put it on the program · [ ] flip feeds</span>
                 {selectedMedia && <MediaTransport element={selectedMedia.element} />}
 
-                {/* The program's picture-in-picture. It belongs to what is on
-                    the inputs, so it is the last row here rather than a panel
-                    of its own. */}
-                <label className="field field--split">
-                  <span className="field__label">
-                    <PictureInPicture2 aria-hidden="true" />
-                    Corner camera
-                  </span>
-                  <select
-                    className="field__select"
-                    data-testid="corner-select"
-                    value={cornerId ?? ''}
-                    onChange={(event) => onCornerChange(event.target.value || null)}
-                  >
-                    <option value="">None</option>
-                    {sources
-                      .filter((source) => source.id !== selectedId)
-                      .map((source) => (
-                        <option key={source.id} value={source.id}>
-                          {source.label}
-                        </option>
-                      ))}
-                  </select>
-                </label>
+                {/* The program's picture-in-picture boxes, one per bottom
+                    corner. They belong to what is on the inputs, so they are
+                    the last rows here rather than a panel of their own. */}
+                {OVERLAY_CORNERS.map((corner) => (
+                  <label className="field field--split" key={corner}>
+                    <span className="field__label">
+                      <PictureInPicture2 aria-hidden="true" />
+                      {OVERLAY_LABELS[corner]}
+                    </span>
+                    <select
+                      className="field__select"
+                      data-testid={`corner-select-${corner}`}
+                      value={overlays[corner] ?? ''}
+                      onChange={(event) => onOverlayChange(corner, event.target.value || null)}
+                    >
+                      <option value="">None</option>
+                      {sources
+                        .filter((source) => source.id !== selectedId)
+                        .map((source) => (
+                          <option key={source.id} value={source.id}>
+                            {source.label}
+                          </option>
+                        ))}
+                    </select>
+                  </label>
+                ))}
                 <span className="side-hint">
-                  The corner camera is the picture-in-picture: bottom-right on air, with a replay
-                  keeping the live feed in the top-right.
+                  Corner cameras are the picture-in-picture, one each side of the program; a
+                  replay keeps the live feed in the top-right. An input sits in one corner at a
+                  time.
                 </span>
               </>
             )}

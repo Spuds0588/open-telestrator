@@ -95,7 +95,7 @@ Of the three layers people naturally collapse into one, only the middle one is
 hard:
 
 1. **Compositing** — putting layers over each other. Free, but only within one
-   document. The studio already does it: video, corner camera and strokes into
+   document. The studio already does it: video, corner cameras and strokes into
    one canvas, which is the program.
 2. **Reading** — turning rendered content into data we may draw. Licensed
    per-resource-origin — and on an MSE page, already granted to the page.

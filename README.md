@@ -29,9 +29,10 @@ program with one click and stops it from the same row; the picker also carries
 **Add a phone camera**, which hands out the **Co-hosts** panel's session as a
 camera only — the phone sends its camera and microphone and is offered no drawing
 surface, because drawing belongs to the host. The
-transport for an opened file sits under the list, and the panel ends with the
-**corner camera** —
-the picture-in-picture that sits bottom-right on air. Alongside it: the **Audio**
+transport for an opened file sits under the list, and the panel ends with the two
+**corner cameras** —
+the picture-in-pictures: one box in each bottom corner, so two feeds can be on air
+at once. Alongside it: the **Audio**
 mixer (announcer mic and captured program audio, each with mute, volume and a
 live level meter); **Replay**; **Co-hosts**, which mints the invite link and QR,
 lists who is connected and can drop one; **Broadcast**, which mints the viewer
@@ -108,7 +109,7 @@ purpose, so the phone keeps showing the camera the rest of the time.
 **Cameras.** Every `videoinput` the machine reports is listed under Input; each
 one opens independently, stays running while you work the others, and appears in
 the feed list with its own live thumbnail. One of them is the program; any other
-can sit in the corner (see **On air** below). Device labels appear once the
+can sit in a corner box (see **On air** below). Device labels appear once the
 browser has been granted a camera.
 
 **Files and streams.** **Open file** takes any video the browser can play and
@@ -128,14 +129,16 @@ rather than turning the broadcast black.
 ## On air: the program picture
 
 **The stage is the program.** While the broadcast is live, everything the host
-sees — the selected video, the corner camera, the live corner during a replay,
-and the telestration strokes — is drawn onto one canvas whose stream goes out to
-viewers. That is what puts the drawing in front of the audience: strokes are not
-a local annotation, they are the broadcast.
+sees — the selected video, the two corner cameras, the live corner during a
+replay, and the telestration strokes — is drawn onto one canvas whose stream goes
+out to viewers. That is what puts the drawing in front of the audience: strokes
+are not a local annotation, they are the broadcast.
 
-- **Corner camera.** Pick any source under **Program → Corner camera** and it
-  sits in the right-hand corner of the programme, for viewers as well as for the
-  host — the commentator's own webcam, or a second angle.
+- **Corner cameras.** Pick any source under **Input → Corner camera** and it sits
+  in the right-hand corner of the programme, for viewers as well as for the host
+  — the commentator's own webcam, or a second angle. **Second corner** puts
+  another source in the left-hand box, so a host and a phone can both be on air;
+  an input sits in one box at a time.
 - **Live corner.** Start an instant replay and the live feed stays in the
   top-right corner while the replay plays big, so nobody misses the next moment.
   Replays therefore reach viewers too: the programme follows the stage.

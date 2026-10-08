@@ -20,8 +20,9 @@ export interface CompositorOptions {
   videoRef: RefObject<HTMLVideoElement>
   /** The live program, shown top-right while a replay plays. */
   liveRef: RefObject<HTMLVideoElement>
-  /** The corner camera, bottom-right, when one is selected. */
+  /** The corner cameras: one element per overlay box, bottom-right then left. */
   cornerRef: RefObject<HTMLVideoElement>
+  cornerLeftRef: RefObject<HTMLVideoElement>
   /** The committed strokes, drawn over everything. */
   strokes: readonly Stroke[]
   /** Whether the stage is showing a replay right now. */
@@ -32,7 +33,7 @@ export interface CompositorOptions {
  * The program compositor.
  *
  * The stage is the program: whatever the host sees — the selected video, the
- * live corner while a replay plays, the commentator's corner camera, and the
+ * live corner while a replay plays, the two corner cameras, and the
  * telestration strokes — is drawn onto one canvas whose stream becomes the
  * broadcast. That is what puts drawings and overlays in front of viewers, and
  * it is why the composited track never changes identity: switching source,
@@ -46,6 +47,7 @@ export function useProgramCompositor({
   videoRef,
   liveRef,
   cornerRef,
+  cornerLeftRef,
   strokes,
   replaying,
 }: CompositorOptions): MediaStream | null {
@@ -79,6 +81,7 @@ export function useProgramCompositor({
     const frame: Rect = { x: 0, y: 0, width: COMPOSITE_WIDTH, height: COMPOSITE_HEIGHT }
     const liveBox = cornerBox(COMPOSITE_WIDTH, COMPOSITE_HEIGHT, 'top-right')
     const camBox = cornerBox(COMPOSITE_WIDTH, COMPOSITE_HEIGHT, 'bottom-right')
+    const camLeftBox = cornerBox(COMPOSITE_WIDTH, COMPOSITE_HEIGHT, 'bottom-left')
 
     const drawSource = (video: HTMLVideoElement | null, box: Rect) => {
       if (!video || video.readyState < 2 || video.videoWidth === 0) return
@@ -92,6 +95,7 @@ export function useProgramCompositor({
       drawSource(videoRef.current, frame)
       if (replayingRef.current) drawSource(liveRef.current, liveBox)
       drawSource(cornerRef.current, camBox)
+      drawSource(cornerLeftRef.current, camLeftBox)
       // Strokes are drawn one by one, not through `renderStrokes`: that helper
       // clears its canvas first, which would wipe the video underneath.
       for (const stroke of strokesRef.current) {
@@ -107,7 +111,7 @@ export function useProgramCompositor({
       stopLoop()
       composited.getTracks().forEach((track) => track.stop())
     }
-  }, [active, videoRef, liveRef, cornerRef])
+  }, [active, videoRef, liveRef, cornerRef, cornerLeftRef])
 
   return stream
 }

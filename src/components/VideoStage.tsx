@@ -22,15 +22,17 @@ function bindOverlay(video: HTMLVideoElement | null, stream: MediaStream | null)
 
 /** The 16:9 stage: the captured video (or a replay of it) with the telestration
  * canvas layered on top, plus the corner overlays — the live program while a
- * replay plays, and the commentator's corner camera. These corners sit exactly
- * where the broadcast compositor draws them. Replay and audio render in the
- * sidebar. */
+ * replay plays, and the two corner cameras. These corners sit exactly where the
+ * broadcast compositor draws them: one picture-in-picture per bottom corner.
+ * Replay and audio render in the sidebar. */
 export function VideoStage({
   stream,
   videoRef,
   liveRef,
   cornerStream,
   cornerRef,
+  cornerLeftStream,
+  cornerLeftRef,
   clip,
   replaying,
   past,
@@ -44,10 +46,14 @@ export function VideoStage({
   videoRef: RefObject<HTMLVideoElement>
   /** The live-program corner, shown while a replay plays. */
   liveRef: RefObject<HTMLVideoElement>
-  /** The chosen corner camera's stream, if one is selected. */
+  /** The bottom-right corner camera's stream, if one is selected. */
   cornerStream: MediaStream | null
-  /** The corner camera's element, drawn by the broadcast compositor. */
+  /** The bottom-right corner camera's element, drawn by the compositor. */
   cornerRef: RefObject<HTMLVideoElement>
+  /** The bottom-left corner camera's stream, if one is selected. */
+  cornerLeftStream: MediaStream | null
+  /** The bottom-left corner camera's element, drawn by the compositor. */
+  cornerLeftRef: RefObject<HTMLVideoElement>
   /** The replay clip currently playing, or null for live video. */
   clip: ReplayClip | null
   /** Whether the stage is showing a replay (suppresses the empty state). */
@@ -123,8 +129,12 @@ export function VideoStage({
   // once the element has mounted.
   useEffect(() => bindOverlay(liveRef.current, stream), [stream, liveRef, replaying])
 
-  // The corner camera plays whenever one is chosen, replay or not.
+  // The corner cameras play whenever one is chosen, replay or not.
   useEffect(() => bindOverlay(cornerRef.current, cornerStream), [cornerStream, cornerRef])
+  useEffect(
+    () => bindOverlay(cornerLeftRef.current, cornerLeftStream),
+    [cornerLeftStream, cornerLeftRef],
+  )
 
   return (
     <div className="screen" data-testid="screen" ref={screenRef}>
@@ -137,8 +147,19 @@ export function VideoStage({
         >
           <video ref={videoRef} className="screen__video" muted playsInline />
           {cornerStream && (
-            <div className="screen__corner screen__corner--cam" data-testid="stage-corner-cam">
+            <div
+              className="screen__corner screen__corner--bottom-right"
+              data-testid="stage-corner-bottom-right"
+            >
               <video ref={cornerRef} className="screen__corner-video" muted playsInline />
+            </div>
+          )}
+          {cornerLeftStream && (
+            <div
+              className="screen__corner screen__corner--bottom-left"
+              data-testid="stage-corner-bottom-left"
+            >
+              <video ref={cornerLeftRef} className="screen__corner-video" muted playsInline />
             </div>
           )}
           {replaying && stream && (

@@ -1,11 +1,40 @@
+import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import {
   COMPOSITE_HEIGHT,
   COMPOSITE_WIDTH,
   CORNER_ASPECT,
+  CORNER_INSET_SHARE,
+  CORNER_WIDTH_SHARE,
+  NO_OVERLAYS,
+  assignOverlay,
   cornerBox,
   fitInRect,
+  pruneOverlays,
 } from './composite'
+
+/**
+ * The stylesheet the stage is drawn with. Vitest runs from the project root, so
+ * this is the same `src/index.css` the app is built from.
+ */
+const css = readFileSync('src/index.css', 'utf8')
+
+/** The declarations of one CSS rule, keyed by property. */
+function declarations(selector: string): Record<string, string> {
+  const body = css.match(new RegExp(`${selector.replace(/\./g, '\\.')}\\s*\\{([^}]*)\\}`))?.[1]
+  expect(body, `${selector} should exist in index.css`).toBeDefined()
+  return Object.fromEntries(
+    (body ?? '')
+      .split(';')
+      .map((line) => line.split(':').map((part) => part.trim()))
+      .filter((parts) => parts.length === 2 && parts[0] !== '') as [string, string][],
+  )
+}
+
+function percent(value: string | undefined, property: string): number {
+  expect(value, `${property} should be set`).toBeDefined()
+  return Number.parseFloat(value ?? '')
+}
 
 describe('cornerBox', () => {
   it('puts a 16:9 box in the bottom-right with the frame inset', () => {
@@ -28,6 +57,85 @@ describe('cornerBox', () => {
     const top = cornerBox(1024, 576, 'top-right')
     const bottom = cornerBox(1024, 576, 'bottom-right')
     expect(top.y + top.height).toBeLessThan(bottom.y)
+  })
+
+  it('mirrors the bottom box to the left of the frame', () => {
+    const right = cornerBox(COMPOSITE_WIDTH, COMPOSITE_HEIGHT, 'bottom-right')
+    const left = cornerBox(COMPOSITE_WIDTH, COMPOSITE_HEIGHT, 'bottom-left')
+    expect(left.x).toBeCloseTo(32)
+    expect(left.y).toBeCloseTo(right.y)
+    expect(left.width).toBeCloseTo(right.width)
+    expect(left.height).toBeCloseTo(right.height)
+  })
+
+  it('keeps the two camera boxes apart, right of the left one', () => {
+    const left = cornerBox(COMPOSITE_WIDTH, COMPOSITE_HEIGHT, 'bottom-left')
+    const right = cornerBox(COMPOSITE_WIDTH, COMPOSITE_HEIGHT, 'bottom-right')
+    expect(left.x + left.width).toBeLessThan(right.x)
+  })
+})
+
+describe('assignOverlay', () => {
+  it('fills a box and empties it again', () => {
+    const filled = assignOverlay(NO_OVERLAYS, 'bottom-right', 'cam-1')
+    expect(filled['bottom-right']).toBe('cam-1')
+    expect(filled['bottom-left']).toBeNull()
+    const emptied = assignOverlay(filled, 'bottom-right', null)
+    expect(emptied['bottom-right']).toBeNull()
+  })
+
+  it('moves a source between boxes instead of showing it twice', () => {
+    const one = assignOverlay(NO_OVERLAYS, 'bottom-right', 'cam-1')
+    const moved = assignOverlay(one, 'bottom-left', 'cam-1')
+    expect(moved['bottom-right']).toBeNull()
+    expect(moved['bottom-left']).toBe('cam-1')
+  })
+
+  it('leaves the other box alone when the source is new', () => {
+    const one = assignOverlay(NO_OVERLAYS, 'bottom-right', 'cam-1')
+    const two = assignOverlay(one, 'bottom-left', 'cam-2')
+    expect(two).toEqual({ 'bottom-right': 'cam-1', 'bottom-left': 'cam-2' })
+  })
+
+  it('returns the same object when nothing would change', () => {
+    const one = assignOverlay(NO_OVERLAYS, 'bottom-right', 'cam-1')
+    expect(assignOverlay(one, 'bottom-right', 'cam-1')).toBe(one)
+    expect(assignOverlay(one, 'bottom-left', null)).toBe(one)
+  })
+})
+
+describe('pruneOverlays', () => {
+  const available = [{ id: 'cam-1' }, { id: 'cam-2' }]
+
+  it('empties a box whose source has gone', () => {
+    const one = assignOverlay(NO_OVERLAYS, 'bottom-right', 'cam-2')
+    const pruned = pruneOverlays(one, [{ id: 'cam-1' }], null)
+    expect(pruned['bottom-right']).toBeNull()
+  })
+
+  it('empties the box that has become the program', () => {
+    const one = assignOverlay(NO_OVERLAYS, 'bottom-left', 'cam-1')
+    expect(pruneOverlays(one, available, 'cam-1')['bottom-left']).toBeNull()
+  })
+
+  it('keeps boxes that are still on a live input', () => {
+    const both = assignOverlay(
+      assignOverlay(NO_OVERLAYS, 'bottom-right', 'cam-1'),
+      'bottom-left',
+      'cam-2',
+    )
+    // A different source is on the program, so neither box is disturbed.
+    expect(pruneOverlays(both, available, 'cam-3')).toBe(both)
+  })
+
+  it('prunes one box without disturbing the other', () => {
+    const both = assignOverlay(
+      assignOverlay(NO_OVERLAYS, 'bottom-right', 'cam-1'),
+      'bottom-left',
+      'cam-2',
+    )
+    const pruned = pruneOverlays(both, [{ id: 'cam-1' }], null)
+    expect(pruned).toEqual({ 'bottom-right': 'cam-1', 'bottom-left': null })
   })
 })
 
@@ -57,5 +165,42 @@ describe('fitInRect', () => {
   it('leaves the box alone for a source with no size yet', () => {
     const box = { x: 1, y: 2, width: 3, height: 4 }
     expect(fitInRect(0, 0, box)).toEqual(box)
+  })
+})
+
+/**
+ * The stage and the canvas draw the same boxes twice, so the CSS has to carry
+ * the constants above it. This is the check that keeps them in step: the DOM
+ * rules are read from index.css and compared with the geometry the compositor
+ * draws, which the project notes call out as a thing to get wrong.
+ */
+describe('the DOM corner boxes', () => {
+  const inset = CORNER_INSET_SHARE * 100
+
+  it('gives every overlay the same width and 16:9 shape the compositor uses', () => {
+    const rule = declarations('.screen__corner')
+    expect(percent(rule.width, 'width')).toBeCloseTo(CORNER_WIDTH_SHARE * 100)
+    const [wide, tall] = (rule['aspect-ratio'] ?? '').split('/').map((n) => Number(n.trim()))
+    expect(wide / tall).toBeCloseTo(CORNER_ASPECT)
+  })
+
+  it('anchors the right-hand camera box to the bottom-right, inset', () => {
+    const rule = declarations('.screen__corner--bottom-right')
+    expect(percent(rule.bottom, 'bottom')).toBeCloseTo(inset)
+    expect(percent(rule.right, 'right')).toBeCloseTo(inset)
+    expect(rule.left).toBeUndefined()
+  })
+
+  it('mirrors the left-hand camera box, inset with no anchor on the right', () => {
+    const rule = declarations('.screen__corner--bottom-left')
+    expect(percent(rule.bottom, 'bottom')).toBeCloseTo(inset)
+    expect(percent(rule.left, 'left')).toBeCloseTo(inset)
+    expect(rule.right).toBeUndefined()
+  })
+
+  it('keeps the live corner in the top-right', () => {
+    const rule = declarations('.screen__corner--live')
+    expect(percent(rule.top, 'top')).toBeCloseTo(inset)
+    expect(percent(rule.right, 'right')).toBeCloseTo(inset)
   })
 })

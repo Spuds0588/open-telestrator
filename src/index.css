@@ -684,7 +684,7 @@ body {
   white-space: nowrap;
 }
 
-/* Sidebar field rows (the corner-camera picker). */
+/* Sidebar field rows (the corner-camera pickers). */
 .field {
   display: flex;
   flex-direction: column;
@@ -1039,10 +1039,10 @@ body {
 
 /* Corner overlays: 16:9 boxes in the stage's own 1280×720 coordinates,
    mirroring the broadcast compositor's geometry (src/lib/composite.ts) — the
-   host sees exactly what viewers are sent. */
+   host sees exactly what viewers are sent. Two camera boxes, one per bottom
+   corner, plus the live corner that a replay pushes to the top-right. */
 .screen__corner {
   position: absolute;
-  right: 2.5%;
   width: 30%;
   aspect-ratio: 16 / 9;
   overflow: hidden;
@@ -1053,10 +1053,17 @@ body {
 
 .screen__corner--live {
   top: 2.5%;
+  right: 2.5%;
 }
 
-.screen__corner--cam {
+.screen__corner--bottom-right {
   bottom: 2.5%;
+  right: 2.5%;
+}
+
+.screen__corner--bottom-left {
+  bottom: 2.5%;
+  left: 2.5%;
 }
 
 .screen__corner-video {

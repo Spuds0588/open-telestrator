@@ -7,8 +7,8 @@
  * fact worth knowing about a panel *while it is closed* — how many inputs are
  * live, whether a co-host has joined, whether the program is on air.
  *
- * The corner camera (the picture-in-picture overlay) has no panel of its own:
- * it belongs to the inputs, and lives at the bottom of the **Input** panel.
+ * The corner cameras (the picture-in-picture overlays) have no panel of their
+ * own: they belong to the inputs, and live at the bottom of the **Input** panel.
  */
 
 import type { MicStatus } from './audio'

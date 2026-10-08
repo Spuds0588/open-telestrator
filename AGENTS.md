@@ -83,12 +83,17 @@ code a phone gets.
   WHIP request shapes — has unit tests; keep it that way when you change those
   paths.
 - **The stage is the program.** While broadcasting, `useProgramCompositor`
-  redraws the stage — video, live corner, corner camera, strokes — into the one
-  canvas stream viewers receive, so drawings and overlays are on air. Draw
-  strokes into it with `drawStroke`, never `renderStrokes`: that helper clears
-  its canvas first and would wipe the video frame underneath. The corner boxes
-  exist twice on purpose — `cornerBox` in `src/lib/composite.ts` and
-  `.screen__corner` in `index.css` — keep their geometry in step.
+  redraws the stage — video, live corner, the two corner cameras, strokes — into
+  the one canvas stream viewers receive, so drawings and overlays are on air.
+  Draw strokes into it with `drawStroke`, never `renderStrokes`: that helper
+  clears its canvas first and would wipe the video frame underneath. The corner
+  boxes exist twice on purpose — `cornerBox` in `src/lib/composite.ts` and
+  `.screen__corner` in `index.css` — keep their geometry in step. There are two
+  camera boxes, one per bottom corner (`OVERLAY_CORNERS`), because two
+  pictures-in-picture can be on air at once: which source sits in which box is a
+  record with its rules (**an input is in one box at a time**; a box empties when
+  its source goes or becomes the program) kept pure in that same module with its
+  tests, not spread over the components. The live corner keeps the top-right.
 - **A media element cannot be a long-lived source via `captureStream()`**: its
   track is removed for good the moment a file ends. Opened files and streams are
   therefore re-drawn onto a canvas (`useMediaFeeds`), which also keeps the last
@@ -118,10 +123,10 @@ code a phone gets.
 - **The controls are a rail plus one panel.** `src/lib/panels.ts` owns the roster
   and the badge each closed panel shows; `src/components/Sidebar.tsx` renders the
   rail and whichever panel is open. There is no panel per app concern: the corner
-  camera (the picture-in-picture) belongs to the **Input** panel with the other
-  source controls. Rail tiles and the co-host's drawing tools are sized for a
-  stylus and a fingertip — keep new controls at least 40px on their short side
-  rather than shrinking them to fit.
+  cameras (the picture-in-pictures) belong to the **Input** panel with the other
+  source controls, one select per box. Rail tiles and the co-host's drawing tools
+  are sized for a stylus and a fingertip — keep new controls at least 40px on
+  their short side rather than shrinking them to fit.
 - **The phone link has one session and two doors, and the door is the role.**
   The cameraman link and the co-host link are the same link — one peer, one token,
   minted once (`useHostCamera.createLink`) — and the only difference is the `role`
